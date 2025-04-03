@@ -1,13 +1,5 @@
-// ==UserScript==
-// @name         Medicus Assistant - Tomorrow Morning Button
-// @version      1.0
-// @description  Adds a "Tomorrow Morning" button next to "Now" buttons in hospital forms
-// @match        *://*/*
-// @grant        none
-// ==/UserScript==
-
-(function () {
-    'use strict';
+ 
+ 'use strict';
 
     function addTomorrowMorningButtons() {
         //find span with id "skierowanie_plan_dataczas_all"
@@ -79,16 +71,42 @@
 
     }
 
-        
+    //function to check if the loaded page is from Medicus
+    function isMedicusPage() {
+        // if any of the checks are not true, return false
 
-    // Initial run
-    $(document).ready(() => {
-        console.log('Medicus Assistant loaded.');
-        // check if the page contains span with id "skierowanie_plan_dataczas_all"
-        if ($('#skierowanie_plan_dataczas_all').length) {
-            addTomorrowMorningButtons();
-        }
+        // check if there is input element with name x_context inside form named "ar" inside tag center inside body, if not return false
+        if ($('body > center > form[name="ar"] > input[name="x_context"]').length === 0) return false;
 
-        
-    });
-})();
+        // the same for "x_sys_context" input
+        if ($('body > center > form[name="ar"] > input[name="x_sys_context"]').length === 0) return false;
+
+        // same for "x_pacjent_ident_id" input
+        if ($('body > center > form[name="ar"] > input[name="x_pacjent_ident_id"]').length === 0) return false;
+
+        // check if there is a js script in head with src containing words "joperis.templates"
+        if ($('head > script[src*="joperis.templates"]').length === 0) return false;
+
+        return true; // All checks passed, it's a Medicus page
+    }
+
+    
+
+
+// Initial run
+$(document).ready(() => {
+    console.log('Medicus Assistant loaded.');
+
+    // Check if the page is a Medicus page
+    if (!isMedicusPage()) {
+        console.log('Not a Medicus page, exiting...');
+        return;
+    }
+
+    // check if the page contains span with id "skierowanie_plan_dataczas_all"
+    if ($('#skierowanie_plan_dataczas_all').length) {
+        addTomorrowMorningButtons();
+    }
+
+    
+});
