@@ -27,14 +27,14 @@
 
         // create the "Tomorrow Morning" button (technically input with type="button")
         const $morningBtn = $('<input type="button">')
-                .val('Rano')
+                .val('Jutro rano')
                 //add a tooltip to the button with help info
                 .attr('title', 'Wybierz datę i godzinę na najbliższe rano o 7:45')
                 .addClass('tomorrow-morning-btn')
                 .css({
-                marginLeft: '5px',
-                //padding: '2px 6px',
-                //fontSize: '90%'
+                    marginLeft: '5px',
+                    //padding: '2px 6px',
+                    //fontSize: '90%'
                 })
                 .on('click', function () {
                 // check if the nearest 7:45 is today or tomorrow
@@ -70,6 +70,8 @@
 
                 // Add the button after the "Now" button
                 $nowButton.after($morningBtn);
+                // Add a non breaking space before the button
+                $nowButton.after('&nbsp;');
                 // Mark the button as added to prevent duplicates
                 $nowButton.data('tomorrow-added', true);
 
@@ -81,6 +83,7 @@
 
     // Initial run
     $(document).ready(() => {
+        console.log('Medicus Assistant loaded.');
         // check if the page contains span with id "skierowanie_plan_dataczas_all"
         if ($('#skierowanie_plan_dataczas_all').length) {
             addTomorrowMorningButtons();
