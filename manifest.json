@@ -1,7 +1,7 @@
 {
     "manifest_version": 3,
     "name": "Medicus Assistant",
-    "version": "0.2.2",
+    "version": "0.2.3",
     "description": "Rozszerzenie wspierające w codziennej pracy lekarza użerającego się z Medicusem",
 	"browser_specific_settings": {
 		"gecko": {
@@ -18,9 +18,7 @@
     "host_permissions": ["<all_urls>"],
     "content_scripts": [
         {
-            "matches": ["<all_urls>", "https://10.10.10.10:8443/PLONSK/servlet/*",
-            "file:///D:/Staż%20Płońsk/medicus/*",
-            "file:///C:/Users/janto/Documents/Sta%C5%BC%20P%C5%82o%C5%84sk/Medicus%20Assistant/*"],
+            "matches": ["<all_urls>", "https://10.10.10.10:8443/PLONSK/servlet/*"],
             "js": ["scripts/jquery.min.js", "scripts/content.js"],
             "css": ["styles/style.css"],
             "run_at": "document_idle"
