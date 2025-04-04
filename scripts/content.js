@@ -90,6 +90,33 @@
         return true; // All checks passed, it's a Medicus page
     }
 
+    // function to set an immediate action in the local storage
+    function setImmediateAction(action) {
+        const expirationTime = new Date().getTime() + 3 * 1000; // 3 seconds from now
+        localStorage.setItem('immediateAction', action);
+        localStorage.setItem('immediateActionExspirationTimestamp', expirationTime);
+    }
+
+    // function to return the immediate action saved in the local storage, if it exists and is not expired
+    function getImmediateAction() {
+        const action = localStorage.getItem('immediateAction');
+        const expirationTimestamp = localStorage.getItem('immediateActionExpirationTimestamp');
+        if (action && expirationTimestamp) {
+            const now = new Date().getTime();
+            if (now < parseInt(expirationTimestamp)) {
+                return action; // Action is valid and not expired
+            } else {
+                clearImmediateAction(); // Action expired, clear it
+            }
+        }
+        return null; // No valid action found
+    }
+
+    //function to clear the immediate action from local storage
+    function clearImmediateAction() {
+        localStorage.removeItem('immediateAction');
+        localStorage.removeItem('immediateActionExpirationTimestamp');
+    }
     
 
 
