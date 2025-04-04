@@ -1,7 +1,7 @@
 {
     "manifest_version": 3,
     "name": "Medicus Assistant",
-    "version": "0.3.0",
+    "version": "0.3.1",
     "homepage_url": "https://github.com/JantekM/Medicus-Assistant",
     "description": "Rozszerzenie wspierające w codziennej pracy lekarza użerającego się z Medicusem",
 	"browser_specific_settings": {
@@ -23,7 +23,7 @@
     },  
     "content_scripts": [
         {
-            "matches": ["<all_urls>", "*://10.10.10.10:*/PLONSK/servlet/*"],
+            "matches": ["<all_urls>"],
             "js": ["scripts/jquery.min.js", "scripts/content.js"],
             "css": ["styles/style.css"],
             "run_at": "document_end",

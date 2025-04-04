@@ -1,3 +1,5 @@
 /.vscode
 /www
+/releases
 launch.json
+releases/*
