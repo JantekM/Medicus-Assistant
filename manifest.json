@@ -6,7 +6,7 @@
     "description": "Rozszerzenie wspierające w codziennej pracy lekarza użerającego się z Medicusem",
 	"browser_specific_settings": {
 		"gecko": {
-		  "id": "medicus_assistant@jantoni.pl"
+		  "id": "medicus-assistant@jantoni.pl" 
 		}
 	},
     "icons": {
