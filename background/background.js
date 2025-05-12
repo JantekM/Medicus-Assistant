@@ -43,6 +43,6 @@ function checkForUpdate() {
     //await chrome.storage.local.set({ addonVersion: currentVersion });
 }
 
-console.log('Background script loaded.');
+console.debug('Background script loaded.');
 // Run the check when the extension is loaded
 checkForUpdate();
