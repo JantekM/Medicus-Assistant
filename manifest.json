@@ -1,12 +1,12 @@
 {
     "manifest_version": 3,
     "name": "Medicus Assistant WIP",
-    "version": "0.4.1",
+    "version": "0.5.1",
     "homepage_url": "https://github.com/JantekM/Medicus-Assistant",
     "description": "Rozszerzenie wspierające w codziennej pracy lekarza użerającego się z Medicusem",
 	"browser_specific_settings": {
 		"gecko": {
-		  "id": "medicus-assistant@jantoni.pl" 
+		  "id": "medicus_assistant@jantoni.pl" 
 		}
 	},
     "icons": {
@@ -18,14 +18,13 @@
     "permissions": ["scripting", "storage", "tabs", "activeTab", "webNavigation", "clipboardWrite", "clipboardRead", "notifications"],
     "host_permissions": ["<all_urls>"],
     "background": {
-        "service_worker": "background/background.js",
         "scripts": ["background/background.js"],
         "type": "module"
     },  
     "content_scripts": [
         {
             "matches": ["<all_urls>"],
-            "js": ["scripts/jquery.min.js", "scripts/scrapeRequestedTests.js", "scripts/content.js"],
+            "js": ["scripts/jquery.min.js", "scripts/poz_specific.js", "scripts/hospital_specific.js", "scripts/scrapeRequestedTests.js", "scripts/content.js"],
             "css": ["styles/style.css"],
             "run_at": "document_end",
             "type": "module"

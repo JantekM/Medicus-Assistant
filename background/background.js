@@ -7,6 +7,7 @@ function checkForUpdate() {
     // chrome.storage.local.get('addonVersion', (result) => {
     //     const previousVersion = result.addonVersion || null;
     // });
+
     chrome.storage.local.get(["addonVersion"]).then((result) => {
        previousVersion = result.addonVersion || null;
        //if there is no previous version, show a hello notification
