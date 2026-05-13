@@ -220,7 +220,9 @@ function addMassAndHeightChecker(pageElements) {
         }
     };
     massInput.on('input', checkValues);
+    massInput.on('change', checkValues);
     heightInput.on('input', checkValues);
+    heightInput.on('change', checkValues);
 
     // Mark the checker as added to prevent duplicates
     massInput.data('checker-added', true);
@@ -308,4 +310,31 @@ function setToPorada(){
         return;
     }
     kodSwiadczeniaSelector.val('4');//.trigger('change');
+}
+
+function pageWizytyUzytkownika(){
+    console.debug('Loading pageWizytyUzytkownika content script...');
+    const visitsTable = $('table.templateListTable');
+    const visitCells = visitsTable.find('tr.rowlist');
+    const visitCellsTd = visitCells.find('td.templateListColumnTd');
+    const pobytTables = visitCells.find('table.pobytTable');
+    const tableHeaders = pobytTables.find('tbody > tr > th');
+    const highlightedCategories = tableHeaders.find('span[style="color:white; background-color:red"]');
+
+    console.debug('pageWizytyUzytkownika:', {
+        visitsTableCount: visitsTable.length,
+        visitCellsCount: visitCells.length,
+        visitCellsTdCount: visitCellsTd.length,
+        pobytTablesCount: pobytTables.length,
+        tableHeadersCount: tableHeaders.length,
+        highlightedCategoriesCount: highlightedCategories.length
+    });
+
+    //for each table row with class rowlist, check if the category is "REC"
+    highlightedCategories.each(function() {
+        const category = $(this).text();
+        if (category === 'REC') {
+            console.debug('Found REC visit: ', $(this).closest('tr.rowlist'));
+        }
+    });
 }

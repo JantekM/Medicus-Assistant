@@ -191,15 +191,23 @@ function checkPage(){
         console.log('Not a Medicus page, exiting...');
         return;
     }
-
+    
     // when loading (async) is completed, then add the click listener but don't wait with the rest of the page loading, because it can be done in the meantime
     loadShortcutGroupsFromStorage().then(() => {
+        // scroll back to the top of the page, because loading shortcut groups can cause the page to scroll to the bottom if some of the buttons are there
+        window.scrollTo(0, 0);
         addGrBtn4ClickListener();
     });
 
     if ($('.templateEditPageTitle').length && $('.templateEditPageTitle').text().includes('Dane medyczne wizyty')) {
         console.log('Loading content for dane-medyczne page...');
         pageDaneMedyczne();
+        return;
+    }
+
+    if ($('.templateListPageTitle').length && $('.templateListPageTitle').text().includes('Wizyty użytkownika')) {
+        console.log('Loading content for wizyty-użytkownika page...');
+        //pageWizytyUzytkownika(); // WIP
         return;
     }
 
