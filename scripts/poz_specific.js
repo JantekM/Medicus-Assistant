@@ -1,3 +1,52 @@
+function autofillAnyVisitType() {
+    // if there is a button with class "btn-wstaw-pomiary", then click it
+        const insertMeasurementsBtn = $('button.btn-wstaw-pomiary');
+        if (insertMeasurementsBtn.length > 0) {
+            insertMeasurementsBtn.on('click', checkValues);
+        } else {
+            console.debug('Insert measurements button not found!');
+        }
+}
+
+function addLoadMassAndHeightButton(pageElements) {
+    if (pageElements.massInput.data('autofill-added')) return;
+    const insertMeasurementsBtn = $('<button type="button">').text('Masa i wzrost').on('click', function() {
+        const loadMassAndHeightBtn = $('button.btn-wstaw-pomiary');
+        if (loadMassAndHeightBtn.length > 0) {
+            loadMassAndHeightBtn.trigger('click');
+            console.debug('Triggered click on insertMeasurementsBtn');
+        } else {
+            console.debug('Insert measurements button not found!');
+        }
+    });
+    const loadMassAndHeightBtn = $('button.btn-wstaw-pomiary');
+        if (loadMassAndHeightBtn.length === 0) {
+            // make insertMeasurementsBtn unclickable
+            insertMeasurementsBtn.prop('disabled', true);
+            console.debug('Insert measurements button not found, disabling the load mass and height button.');
+        }
+        const recBtn = $('#pozRecBtn');
+        if (recBtn.length > 0) {
+            recBtn.after(insertMeasurementsBtn);
+        } else {
+            console.debug('Rec button not found, adding load mass and height button after Teleporada button.');
+            pozTeleBtn.after(insertMeasurementsBtn);
+        }
+    // Mark the button as added to prevent duplicates
+    pageElements.massInput.data('autofill-added', true);
+
+}
+function addMassAndHeightDefaultAutofill(pageElements) {
+
+    if (pageElements.massInput.data('default-autofill-added')) return;
+    const massAndHeightAutofillBtn = $('<button type="button">').text('65/165').on('click', function() {
+        pageElements.massInput.val('65').trigger('input');
+        pageElements.heightInput.val('165').trigger('input');
+    });
+    pageElements.massInput.after(massAndHeightAutofillBtn);
+    pageElements.massInput.data('default-autofill-added', true);
+}
+
 function addVisitTypeAutofillButtons(pageElements) {
     const visitTypeCell = $('#kontakt_typ_porady_all');
     if (visitTypeCell.length != 1) return; // No cell found
@@ -5,11 +54,10 @@ function addVisitTypeAutofillButtons(pageElements) {
     const visitTypeSelector = visitTypeCell.find('select');
     if (visitTypeSelector.length != 1) return; // No select found
     if (visitTypeSelector.data('autofill-added')) return; // Button already added
-
     console.debug('Page elements:', pageElements);
 
     // create a button to set the visit type to "Teleporada"
-    const pozGabBtn = $('<button type="button">').text('Gab').on('click', function() {
+    const pozGabBtn = $('<button type="button">').text('Gab').attr('id', 'pozGabBtn').on('click', function() {
         // trigger click on the insertPoradaWMiejscuBtn, insertPoradaLekarskaIcd9Btn button
         if (pageElements.insertPoradaWMiejscuBtn.length > 0) {
             const codeInput = $('input[name="kontakt_wykonanie_poz_um_skrot_1"]');
@@ -53,7 +101,7 @@ function addVisitTypeAutofillButtons(pageElements) {
             pageElements.badaniePrzedmiotoweTextArea.val('');
             console.debug('Cleared badaniePrzedmiotoweTextArea due to short content.');
         }
-
+        
         // set the visit type to "POZGAB"
         visitTypeSelector.val('POZGAB').trigger('change');
         //get following options, make only the "POZGAB" option selected and the rest unselected
@@ -66,6 +114,7 @@ function addVisitTypeAutofillButtons(pageElements) {
         });
 
         $('select[name="skladniki_procedury_8540"]').val('Gabinetowa');
+        autofillAnyVisitType();
         setToPorada();
 
     });
@@ -73,7 +122,7 @@ function addVisitTypeAutofillButtons(pageElements) {
     //add the button after the visitTypeSelector
     visitTypeSelector.after(pozGabBtn);
 
-    const pozTeleBtn = $('<button type="button">').text('Tele').on('click', function() {
+    const pozTeleBtn = $('<button type="button">').text('Tele').attr('id', 'pozTeleBtn').on('click', function() {
         // trigger click on the insertTeleporadaBtn, insertPoradaLekarskaIcd9Btn button
         if (pageElements.insertTeleporadaBtn.length > 0) {
             const codeInput = $('input[name="kontakt_wykonanie_poz_um_skrot_1"]');
@@ -129,6 +178,7 @@ function addVisitTypeAutofillButtons(pageElements) {
             }
         });
         $('select[name="skladniki_procedury_8540"]').val('Teleporada');
+        autofillAnyVisitType();
         setToPorada();
 
     });
@@ -136,7 +186,7 @@ function addVisitTypeAutofillButtons(pageElements) {
     //add the button after the previous button
     pozGabBtn.after(pozTeleBtn);
 
-    const pozRecBtn = $('<button type="button">').text('Rec').on('click', function() {
+    const pozRecBtn = $('<button type="button">').text('Rec').attr('id', 'pozRecBtn').on('click', function() {
         // trigger click on the insertPoradaReceptowaBtn, insertPoradaLekarskaIcd9Btn button
         if (pageElements.insertPoradaReceptowaBtn.length > 0) {
             const codeInput = $('input[name="kontakt_wykonanie_poz_um_skrot_1"]');
@@ -195,6 +245,7 @@ function addVisitTypeAutofillButtons(pageElements) {
 
         $('input[id="kontakt_rozpoznanie_1"]').val('Z76.0');
         $('input[name="kontakt_rozpoznanie_kod_icd_description"]').val('(Z76.0) Wydanie powtórnej recepty');
+        autofillAnyVisitType();
         setToPorada();
 
     });
@@ -203,6 +254,7 @@ function addVisitTypeAutofillButtons(pageElements) {
     pozTeleBtn.after(pozRecBtn);
     // Mark the button as added to prevent duplicates
     visitTypeSelector.data('autofill-added', true);
+    
 
 }
 
@@ -219,6 +271,7 @@ function addMassAndHeightChecker(pageElements) {
             heightInput.css('background-color', '#ccff99').css('border', 'solid 2px green');
         }
     };
+    
     massInput.on('input', checkValues);
     massInput.on('change', checkValues);
     heightInput.on('input', checkValues);
@@ -276,6 +329,9 @@ function pageDaneMedyczne(){
     //teleporada icd9 btn: find input with type button and value "89.03" inside procedury_icd9 table
     const insertTeleporadaIcd9Btn = proceduryIcd9Table.find('input[type="button"][value="89.0099"]');
 
+    const massInput = $('input[name="temp_pom_waga"]');
+    const heightInput = $('input[name="temp_pom_wzrost"]');
+
     // Create an object with all page-specific elements
     const pageElements = {
         // textareas
@@ -292,12 +348,17 @@ function pageDaneMedyczne(){
         insertPoradaReceptowaBtn: insertPoradaReceptowaBtn,
         // procedury ICD9 buttons
         insertPoradaLekarskaIcd9Btn: insertPoradaLekarskaIcd9Btn,
-        insertTeleporadaIcd9Btn: insertTeleporadaIcd9Btn
+        insertTeleporadaIcd9Btn: insertTeleporadaIcd9Btn,
+        // mass and height inputs
+        massInput: massInput,
+        heightInput: heightInput
     };
 
     console.log('Page elements found:', pageElements);
     addVisitTypeAutofillButtons(pageElements);
     addMassAndHeightChecker(pageElements);
+    addMassAndHeightDefaultAutofill(pageElements);
+    addLoadMassAndHeightButton(pageElements);
 }
 
 function setToPorada(){
@@ -332,9 +393,16 @@ function pageWizytyUzytkownika(){
 
     //for each table row with class rowlist, check if the category is "REC"
     highlightedCategories.each(function() {
-        const category = $(this).text();
+        console.debug('Found highlighted category: ', $(this).text().trim());
+        const category = $(this).text().trim();
         if (category === 'REC') {
             console.debug('Found REC visit: ', $(this).closest('tr.rowlist'));
+            // add "wizyta receptowa" button
+            const addReceptyShortcut = $(this).find('a[class="shortcut"][title="Dodaj recepty"]');
+            const liRecepty = addReceptyShortcut.closest('li');
+            // debug purposes: change the li element color
+            addReceptyShortcut.css('background-color', 'red');
+            liRecepty.css('background-color', 'yellow');
         }
     });
 }
