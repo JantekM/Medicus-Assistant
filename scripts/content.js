@@ -128,7 +128,12 @@ async function loadShortcutGroupsFromStorage() {
                 console.debug('No button found for name:', buttonName);
             }
         }
+        // scroll back to the top of the page, because loading shortcut groups can cause the page to scroll to the bottom if some of the buttons are there
+        console.debug('Scrolling back to the top of the page after loading shortcut groups.');
+        window.scrollTo(0, 0);
+        console.debug('Finished loading shortcut groups from local storage.');
     });
+   
 }
 
 //function to check if the loaded page is from Medicus
@@ -194,8 +199,7 @@ function checkPage(){
     
     // when loading (async) is completed, then add the click listener but don't wait with the rest of the page loading, because it can be done in the meantime
     loadShortcutGroupsFromStorage().then(() => {
-        // scroll back to the top of the page, because loading shortcut groups can cause the page to scroll to the bottom if some of the buttons are there
-        window.scrollTo(0, 0);
+        
         addGrBtn4ClickListener();
     });
 
