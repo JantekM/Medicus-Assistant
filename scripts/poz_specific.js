@@ -1,50 +1,65 @@
 function autofillAnyVisitType() {
     // if there is a button with class "btn-wstaw-pomiary", then click it
-        const insertMeasurementsBtn = $('button.btn-wstaw-pomiary');
-        if (insertMeasurementsBtn.length > 0) {
-            insertMeasurementsBtn.on('click', checkValues);
-        } else {
-            console.debug('Insert measurements button not found!');
-        }
+    const insertMeasurementsBtn = $('button.btn-wstaw-pomiary');
+    if (insertMeasurementsBtn.length > 0) {
+        insertMeasurementsBtn.trigger('click');
+    } else {
+        console.debug('Insert measurements button not found!');
+    }
 }
 
 function addLoadMassAndHeightButton(pageElements) {
-    if (pageElements.massInput.data('autofill-added')) return;
+    if (pageElements.massInput.data('autofill_added')) return;
     const insertMeasurementsBtn = $('<button type="button">').text('Masa i wzrost').on('click', function() {
         const loadMassAndHeightBtn = $('button.btn-wstaw-pomiary');
         if (loadMassAndHeightBtn.length > 0) {
             loadMassAndHeightBtn.trigger('click');
+            
             console.debug('Triggered click on insertMeasurementsBtn');
         } else {
             console.debug('Insert measurements button not found!');
         }
+        //scroll to mass input
+        pageElements.massInput[0].scrollIntoView({ behavior: 'instant', block: 'center' });
     });
     const loadMassAndHeightBtn = $('button.btn-wstaw-pomiary');
         if (loadMassAndHeightBtn.length === 0) {
-            // make insertMeasurementsBtn unclickable
-            insertMeasurementsBtn.prop('disabled', true);
-            console.debug('Insert measurements button not found, disabling the load mass and height button.');
+            // make insertMeasurementsBtn red-colored
+            insertMeasurementsBtn.css('background-color', '#c79e9c').css('border', 'solid 2px red');
+            console.debug('Insert measurements button not found, adding load mass and height button with red color to indicate missing button.');
         }
-        const recBtn = $('#pozRecBtn');
-        if (recBtn.length > 0) {
-            recBtn.after(insertMeasurementsBtn);
+        const domBtn = $('#pozDomBtn');
+        if (domBtn.length > 0) {
+            domBtn.after(insertMeasurementsBtn);
         } else {
-            console.debug('Rec button not found, adding load mass and height button after Teleporada button.');
+            console.debug('DOM button not found, adding load mass and height button after Teleporada button.');
             pozTeleBtn.after(insertMeasurementsBtn);
         }
     // Mark the button as added to prevent duplicates
-    pageElements.massInput.data('autofill-added', true);
+    pageElements.massInput.data('autofill_added', true);
 
 }
 function addMassAndHeightDefaultAutofill(pageElements) {
 
-    if (pageElements.massInput.data('default-autofill-added')) return;
+    if (pageElements.heightInput.data('default_autofill_added')) return;
     const massAndHeightAutofillBtn = $('<button type="button">').text('65/165').on('click', function() {
         pageElements.massInput.val('65').trigger('input');
         pageElements.heightInput.val('165').trigger('input');
     });
-    pageElements.massInput.after(massAndHeightAutofillBtn);
-    pageElements.massInput.data('default-autofill-added', true);
+    pageElements.heightInput.after(massAndHeightAutofillBtn);
+    // create a button to set the visit type to "Teleporada"
+    const scrollUpBtn = $('<button type="button">').text('⬆').attr('id', 'scrollUpBtn').on('click', function() {
+        
+        console.debug('Scroll up button clicked, scrolling up.');
+        
+        const pageStart = $('div[id="danemedycznewizyty"]');
+        pageStart[0].scrollIntoView({ behavior: 'instant', block: 'start' });
+
+    });
+
+    //add the button after the visitTypeSelector
+    massAndHeightAutofillBtn.after(scrollUpBtn);
+    pageElements.heightInput.data('default_autofill_added', true);
 }
 
 function addVisitTypeAutofillButtons(pageElements) {
@@ -53,8 +68,21 @@ function addVisitTypeAutofillButtons(pageElements) {
 
     const visitTypeSelector = visitTypeCell.find('select');
     if (visitTypeSelector.length != 1) return; // No select found
-    if (visitTypeSelector.data('autofill-added')) return; // Button already added
+    if (visitTypeSelector.data('autofill_added')) return; // Button already added
     console.debug('Page elements:', pageElements);
+
+    // create a button to set the visit type to "Teleporada"
+    const scrollDownBtn = $('<button type="button">').text('⬇').attr('id', 'scrollDownBtn').on('click', function() {
+        
+        console.debug('Scroll down button clicked, scrolling down.');
+        
+        const massInput = $('input[name="temp_pom_waga"]');
+        massInput[0].scrollIntoView({ behavior: 'instant', block: 'start' });
+
+    });
+
+    //add the button after the visitTypeSelector
+    visitTypeSelector.after(scrollDownBtn);
 
     // create a button to set the visit type to "Teleporada"
     const pozGabBtn = $('<button type="button">').text('Gab').attr('id', 'pozGabBtn').on('click', function() {
@@ -120,7 +148,7 @@ function addVisitTypeAutofillButtons(pageElements) {
     });
 
     //add the button after the visitTypeSelector
-    visitTypeSelector.after(pozGabBtn);
+    scrollDownBtn.after(pozGabBtn);
 
     const pozTeleBtn = $('<button type="button">').text('Tele').attr('id', 'pozTeleBtn').on('click', function() {
         // trigger click on the insertTeleporadaBtn, insertPoradaLekarskaIcd9Btn button
@@ -225,8 +253,8 @@ function addVisitTypeAutofillButtons(pageElements) {
         }
         
         console.debug('POZ Receptowa button clicked, setting visit type and filling in details.');
-        // set text of badaniePrzedmiotoweTextArea to empty if the current text is shorter than 10 characters
-        if (pageElements.badaniePrzedmiotoweTextArea.val().trim().length < 10) {
+        // set text of badaniePrzedmiotoweTextArea to empty if the current text is shorter than 20 characters
+        if (pageElements.badaniePrzedmiotoweTextArea.val().trim().length < 20) {
             pageElements.badaniePrzedmiotoweTextArea.val('Wizyta receptowa - nie badano przedmiotowo');
             console.debug('Cleared badaniePrzedmiotoweTextArea due to short content.');
         }
@@ -252,16 +280,81 @@ function addVisitTypeAutofillButtons(pageElements) {
 
     //add the button after the previous button
     pozTeleBtn.after(pozRecBtn);
+
+    const pozDomBtn = $('<button type="button">').text('Dom').attr('id', 'pozDomBtn').on('click', function() {
+        // trigger click on the insertPoradaReceptowaBtn, insertPoradaLekarskaIcd9Btn button
+        if (pageElements.insertPoradaWMiejscuBtn.length > 0) {
+            const codeInput = $('input[name="kontakt_wykonanie_poz_um_skrot_1"]');
+            const codeValue = codeInput.val().trim();
+            if (codeValue === 'A121' || codeValue === 'A152' || codeValue === 'A155') {
+                const codeRemoveBtn = $('input[name="kontakt_wykonanie_poz_um_skrot_1_clear"]');
+                if (codeRemoveBtn.length > 0) {
+                    codeRemoveBtn.trigger('click');
+                    console.debug('Cleared existing code in kontakt_wykonanie_poz_um_skrot_1');
+                } else {
+                    console.error('Code remove button not found!');
+                }
+            }
+            pageElements.insertPoradaWMiejscuBtn.trigger('click');
+            console.debug('Triggered click on insertPoradaWMiejscuBtn');
+        } else {
+            console.error('insertPoradaWMiejscuBtn not found!');
+        }
+        
+        if (pageElements.insertPoradaLekarskaIcd9Btn.length > 0) {
+            const codeInput = $('input[name="kontakt_wykonanie_icd9_skrot_1"]');
+            const codeValue = codeInput.val().trim();
+            if (codeValue === '89.02' || codeValue === '89.0099') {
+                const codeRemoveBtn = $('input[name="kontakt_wykonanie_icd9_skrot_1_clear"]');
+                if (codeRemoveBtn.length > 0) {
+                    codeRemoveBtn.trigger('click');
+                    console.debug('Cleared existing code in kontakt_wykonanie_icd9_skrot_1');
+                } else {
+                    console.error('Code remove button not found!');
+                }
+            }
+            pageElements.insertPoradaLekarskaIcd9Btn.trigger('click');
+            console.debug('Triggered click on insertPoradaLekarskaIcd9Btn');
+        } else {
+            console.error('insertPoradaLekarskaIcd9Btn not found!');
+        }
+        
+        console.debug('POZ Dom button clicked, setting visit type and filling in details.');
+        // set text of badaniePrzedmiotoweTextArea to empty if the current text is shorter than 20 characters
+        if (pageElements.badaniePrzedmiotoweTextArea.val().trim().length < 20) {
+            pageElements.badaniePrzedmiotoweTextArea.val('');
+        }
+
+        // set the visit type to "DOM"
+        visitTypeSelector.val('DOM').trigger('change');
+        //get following options, make only the "DOM" option selected and the rest unselected
+        $('select[name="kontakt_typ_porady"] option').each(function() {
+            if ($(this).val().trim() === 'DOM') { 
+                $(this).prop('selected', true);
+            } else {
+                $(this).prop('selected', false);
+            }
+        });
+        $('select[name="skladniki_procedury_8540"]').val('Domowa');
+        
+        autofillAnyVisitType();
+        setToPorada();
+
+    });
+
+    //add the button after the previous button
+    pozRecBtn.after(pozDomBtn);
+
     // Mark the button as added to prevent duplicates
-    visitTypeSelector.data('autofill-added', true);
-    
+    visitTypeSelector.data('autofill_added', true);
+    // console.debug(visitTypeSelector.data());
 
 }
 
 function addMassAndHeightChecker(pageElements) {
     const massInput = $('input[name="temp_pom_waga"]');
     const heightInput = $('input[name="temp_pom_wzrost"]');
-    if (massInput.data('checker-added') || heightInput.data('checker-added')) return; // Checker already added
+    if (massInput.data('checker_added') || heightInput.data('checker_added')) return; // Checker already added
     const checkValues = function() {
         if (massInput.val()==='65' && heightInput.val()==='165') {
             massInput.css('background-color', '#d1736e').css('border', 'solid 2px red');
@@ -278,8 +371,8 @@ function addMassAndHeightChecker(pageElements) {
     heightInput.on('change', checkValues);
 
     // Mark the checker as added to prevent duplicates
-    massInput.data('checker-added', true);
-    heightInput.data('checker-added', true);
+    massInput.data('checker_added', true);
+    heightInput.data('checker_added', true);
 }
 
 function pageDaneMedyczne(){
@@ -359,6 +452,7 @@ function pageDaneMedyczne(){
     addMassAndHeightChecker(pageElements);
     addMassAndHeightDefaultAutofill(pageElements);
     addLoadMassAndHeightButton(pageElements);
+    enhancePhoneNumbers();
 }
 
 function setToPorada(){
@@ -371,6 +465,29 @@ function setToPorada(){
         return;
     }
     kodSwiadczeniaSelector.val('4');//.trigger('change');
+}
+
+function enhancePhoneNumbers(){
+    const patientIdSpan = $('#kontakt_pacjent_ident_id_all');
+    const patientDatTd = patientIdSpan.find('div > table > tbody > tr > td');
+    if(patientDatTd.length !== 1) {
+        console.error('patientDatTd not found or multiple found!');
+        return;
+    }
+    const patientDataText = patientDatTd.find('a').each(function() {
+        const link = $(this);
+        const text = link.text().trim();
+        // Check if the text is a phone number (simple regex for Polish phone numbers)
+        const phoneRegex = /(\+48)?\s?(\d{3}[-\s]?\d{3}[-\s]?\d{3})/;
+        const match = text.match(phoneRegex);
+        if (match) {
+            // If it's a phone number, divide it to a prefix and 3 parts each with 3 digits
+            const prefix = match[1] ? match[1].replace(/\s/g, '') : '';
+            const number = match[2].replace(/\s|-/g, '');
+            const formattedNumber = `${prefix} ${number.slice(0, 3)} ${number.slice(3, 6)} ${number.slice(6)}`;
+            link.text(formattedNumber);
+        }
+    });
 }
 
 function pageWizytyUzytkownika(){

@@ -121,19 +121,38 @@ async function loadShortcutGroupsFromStorage() {
             const shortcutGroup = shortcutGroupsByProcedure[procedureCode];
             const buttonName = `gr_btn4skladniki_procedury_${procedureCode}${shortcutGroup}`;
             const $button = $(`input[type="button"][name="${buttonName}"], button[name="${buttonName}"]`);
+            const parentSpan = $button.closest('span');
+            let spanText = '';
+            if (parentSpan.length) {
+                // get the text of the span, and remove the first character from it, because it is the number from the button
+                const text = parentSpan.text().trim();
+                spanText = text.substring(1).trim();
+                console.debug('Text of the parent span:', spanText);
+            }
             if ($button.length > 0) {
-                $button.trigger('click');
+                // run javascript function 'setGroup4skladniki_procedury_' + procedureCode + '()' which is called when the button is clicked, to set the shortcut group for the procedure code
+                const functionName = `setGroup4skladniki_procedury_${procedureCode}`;
+                const pageWindow = window.wrappedJSObject || window;
+                const pageFunction = pageWindow[functionName];
+
+                // console.debug('Attempting to call function:', functionName, 'with span text:', spanText);
+                // console.debug('Extension world type:', typeof window[functionName]);
+                // console.debug('Page world type:', typeof pageFunction);
+
+                if (typeof pageFunction === 'function') {
+                    pageFunction(`gr4skladniki_procedury_${procedureCode}${shortcutGroup}`, spanText);
+                    console.debug('Called page function:', functionName);
+                } else {
+                    $button.trigger('click');
+                    console.debug('Page function not found, triggered click for button:', buttonName);
+                }
                 console.debug('Triggered click for button with name:', buttonName);
             } else {
                 console.debug('No button found for name:', buttonName);
             }
         }
-        // scroll back to the top of the page, because loading shortcut groups can cause the page to scroll to the bottom if some of the buttons are there
-        console.debug('Scrolling back to the top of the page after loading shortcut groups.');
-        window.scrollTo(0, 0);
-        console.debug('Finished loading shortcut groups from local storage.');
+        
     });
-   
 }
 
 //function to check if the loaded page is from Medicus
@@ -201,7 +220,9 @@ function checkPage(){
     loadShortcutGroupsFromStorage().then(() => {
         
         addGrBtn4ClickListener();
+
     });
+    
 
     if ($('.templateEditPageTitle').length && $('.templateEditPageTitle').text().includes('Dane medyczne wizyty')) {
         console.log('Loading content for dane-medyczne page...');
