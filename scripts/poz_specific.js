@@ -1,3 +1,4 @@
+/** Things that should be done every time any of the available visit types is selected */
 function autofillAnyVisitType() {
     // if there is a button with class "btn-wstaw-pomiary", then click it
     const insertMeasurementsBtn = $('button.btn-wstaw-pomiary');
@@ -8,6 +9,152 @@ function autofillAnyVisitType() {
     }
 }
 
+function addTooltipToIcdCodes(table) {
+    // for each button in the table, add a tooltip with the description of the ICD code, which can be obtained by looking up the code in the codeDict
+    table.find('input[type="button"]').each(function() {
+        const $button = $(this);
+        const text = $button.val().trim();
+        // parse (split) the ICD codes from the button, there can be many codes separated by a comma followed by a space, for example "E11.9, I10"
+        const codes = text.split(',').map(code => code.trim()).filter(Boolean);
+        // get code descriptions for each code, format them like (CODE) DESCRIPTION, and all descriptions with a new line symbol
+        const descriptionPromises = codes.map(code => {
+            return new Promise((resolve) => {
+                chrome.runtime.sendMessage({ type: 'lookupIcdDescription', code }, (response) => {
+                    if (chrome.runtime.lastError) {
+                        console.error('lookupIcdDescription failed for code:', code, chrome.runtime.lastError.message);
+                        resolve(`(${code})`);
+                        return;
+                    }
+
+                    const description = response?.description || '';
+                    resolve(description ? `(${code}) ${description}` : `(${code})`);
+                });
+            });
+        });
+
+        // join all descriptions with a new line symbol
+        Promise.all(descriptionPromises).then((descriptions) => {
+            $button.attr('title', descriptions.join('\n'));
+        });
+    });
+}
+
+function addFrequentlyUsedIcdCodes() {
+
+
+    // the element with fixed id
+    const tdTop = $('td[id="kontakt_rozpoznanie_kod_icd_all"]');
+    if (tdTop.length != 1) return; // No element found
+    //find next sibling of tdTop that is a td element
+    const tdTarget = tdTop.next('td');
+    if (tdTarget.length != 1) return; // No target td found
+    // check if it has valign="top" and rowspan="13"
+    if (tdTarget.attr('valign') !== 'top' || tdTarget.attr('rowspan') !== '13') {
+        console.error('Target td does not have expected attributes:', tdTarget);
+        return;
+    }; // Target td does not have expected attributes
+    //find the first table inside tdTarget
+    const table = tdTarget.find('table').first();
+    if (table.length != 1) return; // No table found
+
+    addTooltipToIcdCodes(table);
+
+    // make a new table with two columns, one for the button with a code and one for the description, and add it to tdTarget
+    const newTable = $('<table>').css('width', '100%').attr('id', 'customlyAddedIcdCodesTable').addClass('custom-icd-table');
+    tdTarget.append(newTable);
+
+    //Lastly used header and row
+    const lastlyUsedHeaderRow = $('<tr>').addClass('custom-icd-header-row').addClass('custom-icd-lastly-used');
+    const lastlyUsedHeaderCell = $('<td>').addClass('custom-icd-header-cell').addClass('custom-icd-lastly-used').append($('<div>').text('Ostatnio używane kody ICD').addClass('custom-icd-header-div').addClass('custom-icd-lastly-used'));
+    lastlyUsedHeaderRow.append(lastlyUsedHeaderCell);
+    //newTable.append(lastlyUsedHeaderRow);
+
+    const lastlyUsedRow = $('<tr>').addClass('custom-icd-row').addClass('custom-icd-lastly-used');
+    const lastlyUsedCell = $('<td>').addClass('custom-icd-cell').addClass('custom-icd-lastly-used');
+    const lastlyUsedDiv = $('<div>').addClass('custom-icd-div').addClass('custom-icd-lastly-used');
+    const lastlyUsedTable = $('<table>').attr('id', 'customlyAddedLastlyUsedIcdCodesTable').addClass('custom-icd-table').addClass('custom-icd-lastly-used');
+    lastlyUsedDiv.append(lastlyUsedTable);
+    lastlyUsedCell.append(lastlyUsedDiv);
+    lastlyUsedRow.append(lastlyUsedCell);
+    newTable.append(lastlyUsedRow);
+
+    //most frequently used header and row
+    const mostFrequentlyUsedHeaderRow = $('<tr>').addClass('custom-icd-header-row').addClass('custom-icd-most-frequently-used');
+    const mostFrequentlyUsedHeaderCell = $('<td>').addClass('custom-icd-header-cell').addClass('custom-icd-most-frequently-used').append($('<div>').text('Najczęściej używane kody ICD').addClass('custom-icd-header-div').addClass('custom-icd-most-frequently-used'));
+    mostFrequentlyUsedHeaderRow.append(mostFrequentlyUsedHeaderCell);
+    newTable.append(mostFrequentlyUsedHeaderRow);
+
+    const mostFrequentlyUsedRow = $('<tr>').addClass('custom-icd-row').addClass('custom-icd-most-frequently-used');
+    const mostFrequentlyUsedCell = $('<td>').addClass('custom-icd-cell').addClass('custom-icd-most-frequently-used');
+    const mostFrequentlyUsedDiv = $('<div>').addClass('custom-icd-div').addClass('custom-icd-most-frequently-used');
+    const mostFrequentlyUsedTable = $('<table>').attr('id', 'customlyAddedMostFrequentlyUsedIcdCodesTable').addClass('custom-icd-table').addClass('custom-icd-most-frequently-used');
+    mostFrequentlyUsedDiv.append(mostFrequentlyUsedTable);
+    mostFrequentlyUsedCell.append(mostFrequentlyUsedDiv);
+    mostFrequentlyUsedRow.append(mostFrequentlyUsedCell);
+    newTable.append(mostFrequentlyUsedRow);
+
+    //favorited codes header and row
+    const favoritedCodesHeaderRow = $('<tr>').addClass('custom-icd-header-row').addClass('custom-icd-favorited');
+    const favoritedCodesHeaderCell = $('<td>').addClass('custom-icd-header-cell').addClass('custom-icd-favorited').append($('<div>').text('Ulubione kody ICD').addClass('custom-icd-header-div').addClass('custom-icd-favorited'));
+    favoritedCodesHeaderRow.append(favoritedCodesHeaderCell);
+    //newTable.append(favoritedCodesHeaderRow);
+
+    const favoritedCodesRow = $('<tr>').addClass('custom-icd-row').addClass('custom-icd-favorited');
+    const favoritedCodesCell = $('<td>').addClass('custom-icd-cell').addClass('custom-icd-favorited');
+    const favoritedCodesDiv = $('<div>').addClass('custom-icd-div').addClass('custom-icd-favorited');
+    const favoritedCodesTable = $('<table>').attr('id', 'customlyAddedFavoritedIcdCodesTable').addClass('custom-icd-table').addClass('custom-icd-favorited');
+    favoritedCodesDiv.append(favoritedCodesTable);
+    favoritedCodesCell.append(favoritedCodesDiv);
+    favoritedCodesRow.append(favoritedCodesCell);
+    newTable.append(favoritedCodesRow);
+
+    // load usedICDCodesCount from chrome.storage.local, if there are no usedICDCodesCount, return with error message in console
+    let usedICDCodesCount = {};
+    chrome.storage.local.get(['usedICDCodesCount']).then((result) => {
+        usedICDCodesCount = result.usedICDCodesCount || {};
+        if (Object.keys(usedICDCodesCount).length === 0) {
+            console.error('No usedICDCodesCount found in local storage.');
+            return;
+        }
+        // for each code in the frequentlyUsedIcdCodes list, add a row to the new table with a button that has the code as text and a description next to it
+        Object.keys(usedICDCodesCount).forEach(code => {
+
+            // lookup description for the code using background script, if there is no description, use an empty string
+            chrome.runtime.sendMessage({ type: 'lookupIcdDescription', code }, (response) => {
+                const description = response?.description || '';
+                const row = $('<tr>');
+                const codeCell = $('<td>').append($('<button type="button">').text(code).on('click', function() { putIcdCodeIntoInput(code, description); }));
+                const descriptionCell = $('<td>').text(description);
+                row.append(codeCell, descriptionCell);
+                mostFrequentlyUsedTable.append(row);
+            });
+        });
+    });
+
+}
+
+function putIcdCodeIntoInput(code, description) {
+    // check all the 6 rozpoznanie input fields, if any of them is empty, put the code and description there and return
+    for (let i = 1; i <= 6; i++) {
+        const codeInput = $(`input[id="kontakt_rozpoznanie_${i}"]`);
+        const inputValue = codeInput.val().trim();
+        //check if trimmed value of codeInput is empty
+        if (inputValue === '') {
+            codeInput.val(code);
+            
+            // find the first next input that has size 60 and is readonly, and put the description there
+            const descriptionInput = codeInput.nextAll('input[size="60"][readonly]').first();
+            if (descriptionInput.length > 0) {
+                descriptionInput.val(`(${code}) ${description}`);
+            }
+            return;
+        }
+    }
+}
+
+/** Insert a button at the top of dane-medyczne page, that automatically fills in mass and height and scrolls down to the mass/height input
+ * Also it should be red-colored if the height and mass from previous visits is not available, and normal-colored if it is available
+*/
 function addLoadMassAndHeightButton(pageElements) {
     if (pageElements.massInput.data('autofill_added')) return;
     const insertMeasurementsBtn = $('<button type="button">').text('Masa i wzrost').on('click', function() {
@@ -27,6 +174,25 @@ function addLoadMassAndHeightButton(pageElements) {
             // make insertMeasurementsBtn red-colored
             insertMeasurementsBtn.css('background-color', '#c79e9c').css('border', 'solid 2px red');
             console.debug('Insert measurements button not found, adding load mass and height button with red color to indicate missing button.');
+
+            // add a DOM observer to check if the button with class "btn-wstaw-pomiary" is added to the page, and if it is, change the color of insertMeasurementsBtn to normal and stop observing
+            const observer = new MutationObserver(function(mutations) {
+                mutations.forEach(function(mutation) {
+                    if (mutation.addedNodes.length > 0) {
+                        const loadMassAndHeightBtn = $('button.btn-wstaw-pomiary');
+                        if (loadMassAndHeightBtn.length > 0) {
+                            insertMeasurementsBtn.css('background-color', '').css('border', '');
+                            observer.disconnect();
+                        }
+                    }
+                });
+            });
+            const targetNode = $('td[id="temp_pom_waga_all"]')[0];
+            if (targetNode) {
+                observer.observe(targetNode, { childList: true, subtree: true });
+            } else {
+                console.error('Target node for wstaw-pomiary-btn MutationObserver not found!');
+            }
         }
         const domBtn = $('#pozDomBtn');
         if (domBtn.length > 0) {
@@ -453,6 +619,7 @@ function pageDaneMedyczne(){
     addMassAndHeightDefaultAutofill(pageElements);
     addLoadMassAndHeightButton(pageElements);
     enhancePhoneNumbers();
+    addFrequentlyUsedIcdCodes();
 }
 
 function setToPorada(){

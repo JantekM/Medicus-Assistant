@@ -1,0 +1,9 @@
+div.custom-icd-div {
+    max-height: 300px;
+    overflow-y: auto;
+    overflow-x: hidden;
+}
+
+.custom-icd-table td {
+    vertical-align: top;
+}

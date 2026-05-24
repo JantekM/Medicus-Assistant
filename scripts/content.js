@@ -72,6 +72,80 @@ function addTomorrowMorningButtons() {
 }
 
 
+function addPostBtnListener() {
+    // Delegated listener handles existing and dynamically added buttons.
+    $(document)
+        .off('click.MA_post_btn')
+        .on('click.MA_post_btn', 'button[type="submit"][name="btn_ok"]', function () {
+            handlePostClick(this);
+            console.debug('Handled click for button with name:', $(this).attr('name'));
+        });
+    console.debug('Added delegated click listener for the post button.');
+}
+
+function handlePostClick(button) {
+    // Put your specific logic here; the clicked button element is passed in.
+    console.debug('Post button clicked:', button);
+    // applies to zlecenie badań, skierowanie do poradni, ...
+    const icdZlecenie = $('input[name="skierowanie_kod_icd10"]').val();
+    const rozpoznanie1 = $('input[id="kontakt_rozpoznanie_1"]').val();
+    const rozpoznanie2 = $('input[id="kontakt_rozpoznanie_2"]').val();
+    const rozpoznanie3 = $('input[id="kontakt_rozpoznanie_3"]').val();
+    const rozpoznanie4 = $('input[id="kontakt_rozpoznanie_4"]').val();
+    const rozpoznanie5 = $('input[id="kontakt_rozpoznanie_5"]').val();
+    const rozpoznanie6 = $('input[id="kontakt_rozpoznanie_6"]').val();
+
+    // filter out undefined, null and empty values from the list of rozpoznanie
+    //then trim the values, and change all the letters to uppercase
+    const rozpoznania = [icdZlecenie, rozpoznanie1, rozpoznanie2, rozpoznanie3, rozpoznanie4, rozpoznanie5, rozpoznanie6]
+        .filter(r => r)
+        .map(r => r.trim().toUpperCase());
+    saveUsedICDs(rozpoznania);
+    console.debug('ICD code for the order:', rozpoznania);
+
+}
+
+/** Saves the lastly used ICD codes to the local storage, so that they can be used later for autofilling or suggestions when creating new orders or referrals. 
+ * The input is an array of string codes, already trimmed and in uppercase but not checked for validity
+ * No more than 100 codes should be stored at one time in memory, if there is more than 100, only the current newest 100 codes will be stored, and the rest will be discarded.
+ * The codes can be duplicates, because the most important thing is to know which codes were used recently and how many times, to be able to suggest the most frequently used codes for autofill.
+ * 
+ * @param {[string]} icdCodes 
+ */
+function saveUsedICDs(icdCodes) {
+    if (!icdCodes || icdCodes.length === 0) return;
+    chrome.storage.local.get(['usedICDCodes']).then((result) => {
+        let usedICDCodes = result.usedICDCodes || [];
+        // add the new codes to the beginning of the list
+        usedICDCodes = icdCodes.concat(usedICDCodes);
+        // keep only the newest 100 codes
+        usedICDCodes = usedICDCodes.slice(0, 100);
+        chrome.storage.local.set({ usedICDCodes });
+        console.debug('Updated usedICDCodes in local storage:', usedICDCodes);
+
+        // After saving the codes to the local with duplicates, another local storage variable should be updated with the codes without duplucates and with the count of how many times each code was used, to be able to suggest the most frequently used codes for autofill. This variable should be an object with keys as ICD codes and values as counts of usage.
+        let usedICDCodesCount = {};
+        usedICDCodes.forEach(code => {
+            if (usedICDCodesCount[code]) {
+                usedICDCodesCount[code]++;
+            } else {
+                usedICDCodesCount[code] = 1;
+            }
+        });
+        // sort the usedICDCodesCount object by count in descending order, then by how recently the code was used (the order in the usedICDCodes array)
+        usedICDCodesCount = Object.fromEntries(Object.entries(usedICDCodesCount).sort((a, b) => {
+            if (b[1] === a[1]) {
+                // if the counts are the same, sort by how recently the code was used
+                return usedICDCodes.indexOf(a[0]) - usedICDCodes.indexOf(b[0]);
+            }
+            return b[1] - a[1];
+        }));
+
+        chrome.storage.local.set({ usedICDCodesCount });
+        console.debug('Updated usedICDCodesCount in local storage:', usedICDCodesCount);
+    });
+}
+
 
 
 function handleGrBtn4Click(buttonName, $button) {
@@ -218,10 +292,9 @@ function checkPage(){
     
     // when loading (async) is completed, then add the click listener but don't wait with the rest of the page loading, because it can be done in the meantime
     loadShortcutGroupsFromStorage().then(() => {
-        
         addGrBtn4ClickListener();
-
     });
+    addPostBtnListener();
     
 
     if ($('.templateEditPageTitle').length && $('.templateEditPageTitle').text().includes('Dane medyczne wizyty')) {
