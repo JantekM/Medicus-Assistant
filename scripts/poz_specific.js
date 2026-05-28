@@ -716,10 +716,17 @@ function enhancePhoneNumbers(){
     const patientIdSpan = $('#kontakt_pacjent_ident_id_all');
     const patientDatTd = patientIdSpan.find('div > table > tbody > tr > td');
     if(patientDatTd.length !== 1) {
-        console.error('patientDatTd not found or multiple found!');
-        return;
+        if(patientDatTd.length === 2){
+            if(!(patientDatTd.eq(1).text().startsWith('#Karta DiLO:'))) {
+                console.error('patientDatTd not found or multiple found!');
+                return;
+            }
+        }else{
+            console.error('patientDatTd not found or multiple found!');
+            return;
+        }
     }
-    const patientDataText = patientDatTd.find('a').each(function() {
+    const patientDataText = patientDatTd.eq(0).find('a').each(function() {
         const link = $(this);
         const text = link.text().trim();
         // Check if the text is a phone number (simple regex for Polish phone numbers)
