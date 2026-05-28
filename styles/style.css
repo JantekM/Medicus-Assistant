@@ -7,3 +7,26 @@ div.custom-icd-div {
 .custom-icd-table td {
     vertical-align: top;
 }
+
+/* <label class="heart-checkbox">
+  <input type="checkbox" />
+  <span></span>
+</label>
+*/
+.heart-checkbox {
+  display: inline-flex;
+  align-items: center;
+}
+.heart-checkbox input {
+  display: none;
+}
+.heart-checkbox span::before {
+  content: "♡";
+  font-size: 24px;
+  color: #444;
+  line-height: 1;
+}
+.heart-checkbox input:checked + span::before {
+  content: "♥";
+  color: crimson;
+}
