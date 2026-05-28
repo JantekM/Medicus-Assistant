@@ -73,6 +73,75 @@ function addTomorrowMorningButtons() {
 
 
 function addPostBtnListener() {
+    function handlePostClick(button) {
+        
+        /** Saves the lastly used ICD codes to the local storage, so that they can be used later for autofilling or suggestions when creating new orders or referrals. 
+         * The input is an array of string codes, already trimmed and in uppercase but not checked for validity
+         * No more than 100 codes should be stored at one time in memory, if there is more than 100, only the current newest 100 codes will be stored, and the rest will be discarded.
+         * The codes can be duplicates, because the most important thing is to know which codes were used recently and how many times, to be able to suggest the most frequently used codes for autofill.
+         * 
+         * @param {[string]} icdCodes 
+         */
+        function saveUsedICDs(icdCodes) {
+            if (!icdCodes || icdCodes.length === 0) return;
+            chrome.storage.local.get(['usedICDCodes']).then((result) => {
+                let usedICDCodes = result.usedICDCodes || [];
+                // add the new codes to the beginning of the list
+                usedICDCodes = icdCodes.concat(usedICDCodes);
+                // keep only the newest 100 codes
+                usedICDCodes = usedICDCodes.slice(0, 100);
+                chrome.storage.local.set({ usedICDCodes });
+                console.debug('Updated usedICDCodes in local storage:', usedICDCodes);
+
+                // After saving the codes to the local with duplicates, another local storage variable should be updated with the codes without duplucates and with the count of how many times each code was used, to be able to suggest the most frequently used codes for autofill. This variable should be an object with keys as ICD codes and values as counts of usage.
+                let usedICDCodesCount = {};
+                usedICDCodes.forEach(code => {
+                    if (usedICDCodesCount[code]) {
+                        usedICDCodesCount[code]++;
+                    } else {
+                        usedICDCodesCount[code] = 1;
+                    }
+                });
+                // sort the usedICDCodesCount object by count in descending order, then by how recently the code was used (the order in the usedICDCodes array)
+                usedICDCodesCount = Object.fromEntries(Object.entries(usedICDCodesCount).sort((a, b) => {
+                    if (b[1] === a[1]) {
+                        // if the counts are the same, sort by how recently the code was used
+                        return usedICDCodes.indexOf(a[0]) - usedICDCodes.indexOf(b[0]);
+                    }
+                    return b[1] - a[1];
+                }));
+
+                chrome.storage.local.set({ usedICDCodesCount });
+                console.debug('Updated usedICDCodesCount in local storage:', usedICDCodesCount);
+            });
+        }
+
+
+
+
+        // Put your specific logic here; the clicked button element is passed in.
+        console.debug('Post button clicked:', button);
+        // applies to zlecenie badań, skierowanie do poradni, ...
+        const icdZlecenie = $('input[name="skierowanie_kod_icd10"]').val();
+        const rozpoznanie1 = $('input[id="kontakt_rozpoznanie_1"]').val();
+        const rozpoznanie2 = $('input[id="kontakt_rozpoznanie_2"]').val();
+        const rozpoznanie3 = $('input[id="kontakt_rozpoznanie_3"]').val();
+        const rozpoznanie4 = $('input[id="kontakt_rozpoznanie_4"]').val();
+        const rozpoznanie5 = $('input[id="kontakt_rozpoznanie_5"]').val();
+        const rozpoznanie6 = $('input[id="kontakt_rozpoznanie_6"]').val();
+
+        // filter out undefined, null and empty values from the list of rozpoznanie
+        //then trim the values, and change all the letters to uppercase
+        const rozpoznania = [icdZlecenie, rozpoznanie1, rozpoznanie2, rozpoznanie3, rozpoznanie4, rozpoznanie5, rozpoznanie6]
+            .filter(r => r)
+            .map(r => r.trim().toUpperCase());
+        saveUsedICDs(rozpoznania);
+        console.debug('ICD code for the order:', rozpoznania);
+
+    }
+
+
+
     // Delegated listener handles existing and dynamically added buttons.
     $(document)
         .off('click.MA_post_btn')
@@ -83,97 +152,35 @@ function addPostBtnListener() {
     console.debug('Added delegated click listener for the post button.');
 }
 
-function handlePostClick(button) {
-    // Put your specific logic here; the clicked button element is passed in.
-    console.debug('Post button clicked:', button);
-    // applies to zlecenie badań, skierowanie do poradni, ...
-    const icdZlecenie = $('input[name="skierowanie_kod_icd10"]').val();
-    const rozpoznanie1 = $('input[id="kontakt_rozpoznanie_1"]').val();
-    const rozpoznanie2 = $('input[id="kontakt_rozpoznanie_2"]').val();
-    const rozpoznanie3 = $('input[id="kontakt_rozpoznanie_3"]').val();
-    const rozpoznanie4 = $('input[id="kontakt_rozpoznanie_4"]').val();
-    const rozpoznanie5 = $('input[id="kontakt_rozpoznanie_5"]').val();
-    const rozpoznanie6 = $('input[id="kontakt_rozpoznanie_6"]').val();
-
-    // filter out undefined, null and empty values from the list of rozpoznanie
-    //then trim the values, and change all the letters to uppercase
-    const rozpoznania = [icdZlecenie, rozpoznanie1, rozpoznanie2, rozpoznanie3, rozpoznanie4, rozpoznanie5, rozpoznanie6]
-        .filter(r => r)
-        .map(r => r.trim().toUpperCase());
-    saveUsedICDs(rozpoznania);
-    console.debug('ICD code for the order:', rozpoznania);
-
-}
-
-/** Saves the lastly used ICD codes to the local storage, so that they can be used later for autofilling or suggestions when creating new orders or referrals. 
- * The input is an array of string codes, already trimmed and in uppercase but not checked for validity
- * No more than 100 codes should be stored at one time in memory, if there is more than 100, only the current newest 100 codes will be stored, and the rest will be discarded.
- * The codes can be duplicates, because the most important thing is to know which codes were used recently and how many times, to be able to suggest the most frequently used codes for autofill.
- * 
- * @param {[string]} icdCodes 
- */
-function saveUsedICDs(icdCodes) {
-    if (!icdCodes || icdCodes.length === 0) return;
-    chrome.storage.local.get(['usedICDCodes']).then((result) => {
-        let usedICDCodes = result.usedICDCodes || [];
-        // add the new codes to the beginning of the list
-        usedICDCodes = icdCodes.concat(usedICDCodes);
-        // keep only the newest 100 codes
-        usedICDCodes = usedICDCodes.slice(0, 100);
-        chrome.storage.local.set({ usedICDCodes });
-        console.debug('Updated usedICDCodes in local storage:', usedICDCodes);
-
-        // After saving the codes to the local with duplicates, another local storage variable should be updated with the codes without duplucates and with the count of how many times each code was used, to be able to suggest the most frequently used codes for autofill. This variable should be an object with keys as ICD codes and values as counts of usage.
-        let usedICDCodesCount = {};
-        usedICDCodes.forEach(code => {
-            if (usedICDCodesCount[code]) {
-                usedICDCodesCount[code]++;
-            } else {
-                usedICDCodesCount[code] = 1;
-            }
-        });
-        // sort the usedICDCodesCount object by count in descending order, then by how recently the code was used (the order in the usedICDCodes array)
-        usedICDCodesCount = Object.fromEntries(Object.entries(usedICDCodesCount).sort((a, b) => {
-            if (b[1] === a[1]) {
-                // if the counts are the same, sort by how recently the code was used
-                return usedICDCodes.indexOf(a[0]) - usedICDCodes.indexOf(b[0]);
-            }
-            return b[1] - a[1];
-        }));
-
-        chrome.storage.local.set({ usedICDCodesCount });
-        console.debug('Updated usedICDCodesCount in local storage:', usedICDCodesCount);
-    });
-}
 
 
-
-function handleGrBtn4Click(buttonName, $button) {
-    // Put your specific logic here; exact clicked name is passed in buttonName.
-    console.debug('gr_btn4 clicked:', buttonName, $button);
-
-    // parse the name of the button, if it doesn't follow the usual pattern, log an error and return
-    // The pattern "gr_btn4" + "skladniki_procedury_" + four digit code for procedure + 1 digit code for the shortcut group, eg. gr_btn4skladniki_procedury_17084
-    const regex = /^gr_btn4skladniki_procedury_(\d{4})(\d)$/;
-    const match = buttonName.match(regex);
-    if (!match) {
-        console.error('Unexpected button name format:', buttonName);
-        return;
-    }
-    const procedureCode = match[1];
-    const shortcutGroup = match[2];
-    console.debug('Parsed procedure code:', procedureCode, 'Shortcut group:', shortcutGroup);
-
-    //update the local storage with the procedure code and shortcut group, so that each procedure code stores the last used shortcut group for it, there can be multiple procedure codes, and each of them can have a different shortcut group
-    chrome.storage.local.get(['shortcutGroupsByProcedure']).then((result) => {
-        const shortcutGroupsByProcedure = result.shortcutGroupsByProcedure || {};
-        shortcutGroupsByProcedure[procedureCode] = shortcutGroup;
-        chrome.storage.local.set({ shortcutGroupsByProcedure });
-        console.debug('Updated shortcutGroupsByProcedure in local storage:', shortcutGroupsByProcedure);
-    });
-}
 
 function addGrBtn4ClickListener() {
+    function handleGrBtn4Click(buttonName, $button) {
+        // Put your specific logic here; exact clicked name is passed in buttonName.
+        console.debug('gr_btn4 clicked:', buttonName, $button);
+
+        // parse the name of the button, if it doesn't follow the usual pattern, log an error and return
+        // The pattern "gr_btn4" + "skladniki_procedury_" + four digit code for procedure + 1 digit code for the shortcut group, eg. gr_btn4skladniki_procedury_17084
+        const regex = /^gr_btn4skladniki_procedury_(\d{4})(\d)$/;
+        const match = buttonName.match(regex);
+        if (!match) {
+            console.error('Unexpected button name format:', buttonName);
+            return;
+        }
+        const procedureCode = match[1];
+        const shortcutGroup = match[2];
+        console.debug('Parsed procedure code:', procedureCode, 'Shortcut group:', shortcutGroup);
+
+        //update the local storage with the procedure code and shortcut group, so that each procedure code stores the last used shortcut group for it, there can be multiple procedure codes, and each of them can have a different shortcut group
+        chrome.storage.local.get(['shortcutGroupsByProcedure']).then((result) => {
+            const shortcutGroupsByProcedure = result.shortcutGroupsByProcedure || {};
+            shortcutGroupsByProcedure[procedureCode] = shortcutGroup;
+            chrome.storage.local.set({ shortcutGroupsByProcedure });
+            console.debug('Updated shortcutGroupsByProcedure in local storage:', shortcutGroupsByProcedure);
+        });
+    }
+
     // Delegated listener handles existing and dynamically added buttons.
     $(document)
         .off('click.MA_gr_btn4')
@@ -229,23 +236,70 @@ async function loadShortcutGroupsFromStorage() {
     });
 }
 
-//function to check if the loaded page is from Medicus
-function isMedicusPage() {
-    // if any of the checks are not true, return false
+function toggleIcdCodeInFavorites(checkbox) {
+    const code = $(checkbox).data('icd-code');
+    chrome.storage.local.get(['favoritedICDCodes']).then((result) => {
+        let favoritedICDCodes = result.favoritedICDCodes || [];
+        if ($(checkbox).is(':checked')) {
+            favoritedICDCodes.push(code);
+        } else {
+            favoritedICDCodes = favoritedICDCodes.filter(c => c !== code);
+        }
+        chrome.storage.local.set({favoritedICDCodes});
+        console.debug('Updated favoritedICDCodes in local storage:', favoritedICDCodes);
+    });
+}
 
-    // check if there is input element with name x_context inside form named "ar" inside tag center inside body, if not return false
-    if ($('body > center > form[name="ar"] > input[name="x_context"]').length === 0) return false;
+function addFavoriteCheckbox(followingElement, code, favoritedICDCodes) {
+    const checkbox = $(`<input type="checkbox" class="icd-favorite-checkbox" data-icd-code="${code}">`);
+        const label = $('<label class="heart-checkbox"></label>');
+        followingElement.before(label);
+        label.append(checkbox);
+        checkbox.after('<span class="heart-icon" title="Oznacz jako ulubione">&nbsp;</span>');
 
-    // the same for "x_sys_context" input
-    if ($('body > center > form[name="ar"] > input[name="x_sys_context"]').length === 0) return false;
+        //if the code appears in the favoritedICDCodes list from the local storage, check the checkbox
+        if(favoritedICDCodes.includes(code)) {
+            checkbox.prop('checked', true);
+        }
 
-    // same for "x_pacjent_ident_id" input
-    if ($('body > center > form[name="ar"] > input[name="x_pacjent_ident_id"]').length === 0) return false;
+        // add a click listener to the checkbox, when it is clicked, if it is checked, add the code to the favoritedICDCodes list in the local storage, if it is unchecked, remove the code from the favoritedICDCodes list in the local storage
+        checkbox.on('click', () => {
+            toggleIcdCodeInFavorites(checkbox);
+        });
+}
 
-    // check if there is a js script in head with src containing words "joperis.templates"
-    if ($('head > script[src*="joperis.templates"]').length === 0) return false;
+async function pageIcdPopup(){
+    const mainTable = $('table.templateListTable');
+    if(mainTable.length === 0) {
+        console.error('Could not find the main table on the ICD popup page.');
+        return;
+    }
 
-    return true; // All checks passed, it's a Medicus page
+    // find all rows in the table with class 'rowlist'
+    const rows = mainTable.find('tr.rowlist');
+    if(rows.length === 0) {
+        console.error('Could not find any rows with class "rowlist" in the main table on the ICD popup page.');
+        return;
+    }
+    let favoritedICDCodes = await chrome.storage.local.get(['favoritedICDCodes']);
+        favoritedICDCodes = favoritedICDCodes.favoritedICDCodes || [];
+    // for each row, do stuff
+    rows.each((index, row) => {
+        // find first and second cell of the row
+        const cells = $(row).find('td');
+        if(cells.length < 2) {
+            console.warn('Row does not have enough cells, skipping:', row);
+            return;
+        }
+        const codeCell = cells.eq(0);
+        const descriptionCell = cells.eq(1);
+
+        // find a tag inside description cell, insert a custom input checkbox element before it, with class "icd-favorite-checkbox" and data attribute "icd-code" with the value of the code from the first cell, and add a label "Ulubione" after the checkbox
+        const link = descriptionCell.find('a');
+        
+        const code = codeCell.text().trim(); 
+        addFavoriteCheckbox(link, code, favoritedICDCodes);
+    });
 }
 
 // function to set an immediate action in the local storage
@@ -284,6 +338,28 @@ function clearImmediateAction() {
 }
 
 function checkPage(){
+    //function to check if the loaded page is from Medicus
+    function isMedicusPage() {
+        // if any of the checks are not true, return false
+
+        // check if there is input element with name x_context inside form named "ar" inside tag center inside body, if not return false
+        if ($('body > center > form[name="ar"] > input[name="x_context"]').length === 0) return false;
+
+        // the same for "x_sys_context" input
+        if ($('body > center > form[name="ar"] > input[name="x_sys_context"]').length === 0) return false;
+
+        // same for "x_pacjent_ident_id" input
+        if ($('body > center > form[name="ar"] > input[name="x_pacjent_ident_id"]').length === 0) {
+            if ($('body > center > form[name="ar"] > input[name="x_popup_sos"]').length === 0) return false;
+            if ($('body > center > form[name="ar"] > input[name="x_servlet_param"]').length === 0) return false;
+        }
+
+        // check if there is a js script in head with src containing words "joperis.templates"
+        if ($('head > script[src*="joperis.templates"]').length === 0) return false;
+
+        return true; // All checks passed, it's a Medicus page
+    }
+
     // Check if the page is a Medicus page
     if (!isMedicusPage()) {
         console.log('Not a Medicus page, exiting...');
@@ -306,6 +382,12 @@ function checkPage(){
     if ($('.templateListPageTitle').length && $('.templateListPageTitle').text().includes('Wizyty użytkownika')) {
         console.log('Loading content for wizyty-użytkownika page...');
         //pageWizytyUzytkownika(); // WIP
+        return;
+    }
+
+     if ($('.templateListPageTitle').length && $('.templateListPageTitle').text().includes('Rozpoznania (ICD-10)')) {
+        console.log('Loading content for rozpoznania-icd-10 popup page...');
+        pageIcdPopup(); // WIP
         return;
     }
 

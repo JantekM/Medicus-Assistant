@@ -39,25 +39,36 @@ function addTooltipToIcdCodes(table) {
     });
 }
 
-function addFrequentlyUsedIcdCodes() {
-
+async function addFrequentlyUsedIcdCodes() {
+    const favoritedICDCodesPromise = chrome.storage.local.get(['favoritedICDCodes']);
+    const usedICDCodesCountPromise = chrome.storage.local.get(['usedICDCodesCount']);
+    const lastlyUsedICDCodesPromise = chrome.storage.local.get(['usedICDCodes']);
 
     // the element with fixed id
     const tdTop = $('td[id="kontakt_rozpoznanie_kod_icd_all"]');
     if (tdTop.length != 1) return; // No element found
     //find next sibling of tdTop that is a td element
-    const tdTarget = tdTop.next('td');
-    if (tdTarget.length != 1) return; // No target td found
+    let tdTarget = tdTop.next('td');
+    if (tdTarget.length != 1) {
+        // add a new tdTarget after tdTop
+        tdTarget = $('<td>').insertAfter(tdTop);
+        tdTarget.attr('valign', 'top').attr('rowspan', '13');
+    } 
     // check if it has valign="top" and rowspan="13"
     if (tdTarget.attr('valign') !== 'top' || tdTarget.attr('rowspan') !== '13') {
         console.error('Target td does not have expected attributes:', tdTarget);
         return;
     }; // Target td does not have expected attributes
     //find the first table inside tdTarget
-    const table = tdTarget.find('table').first();
-    if (table.length != 1) return; // No table found
+    let table = tdTarget.find('table').first();
+    if (table.length != 1) {
+        // add a new table inside tdTarget
+        table = $('<table>').attr('id', 'customlyAddedMissingLastlyUsedIcdCodesTable').appendTo(tdTarget);
+    }else{ 
+        addTooltipToIcdCodes(table);
+    }
 
-    addTooltipToIcdCodes(table);
+    
 
     // make a new table with two columns, one for the button with a code and one for the description, and add it to tdTarget
     const newTable = $('<table>').css('width', '100%').attr('id', 'customlyAddedIcdCodesTable').addClass('custom-icd-table');
@@ -67,7 +78,7 @@ function addFrequentlyUsedIcdCodes() {
     const lastlyUsedHeaderRow = $('<tr>').addClass('custom-icd-header-row').addClass('custom-icd-lastly-used');
     const lastlyUsedHeaderCell = $('<td>').addClass('custom-icd-header-cell').addClass('custom-icd-lastly-used').append($('<div>').text('Ostatnio używane kody ICD').addClass('custom-icd-header-div').addClass('custom-icd-lastly-used'));
     lastlyUsedHeaderRow.append(lastlyUsedHeaderCell);
-    //newTable.append(lastlyUsedHeaderRow);
+    newTable.append(lastlyUsedHeaderRow);
 
     const lastlyUsedRow = $('<tr>').addClass('custom-icd-row').addClass('custom-icd-lastly-used');
     const lastlyUsedCell = $('<td>').addClass('custom-icd-cell').addClass('custom-icd-lastly-used');
@@ -97,7 +108,7 @@ function addFrequentlyUsedIcdCodes() {
     const favoritedCodesHeaderRow = $('<tr>').addClass('custom-icd-header-row').addClass('custom-icd-favorited');
     const favoritedCodesHeaderCell = $('<td>').addClass('custom-icd-header-cell').addClass('custom-icd-favorited').append($('<div>').text('Ulubione kody ICD').addClass('custom-icd-header-div').addClass('custom-icd-favorited'));
     favoritedCodesHeaderRow.append(favoritedCodesHeaderCell);
-    //newTable.append(favoritedCodesHeaderRow);
+    newTable.append(favoritedCodesHeaderRow);
 
     const favoritedCodesRow = $('<tr>').addClass('custom-icd-row').addClass('custom-icd-favorited');
     const favoritedCodesCell = $('<td>').addClass('custom-icd-cell').addClass('custom-icd-favorited');
@@ -108,14 +119,53 @@ function addFrequentlyUsedIcdCodes() {
     favoritedCodesRow.append(favoritedCodesCell);
     newTable.append(favoritedCodesRow);
 
-    // load usedICDCodesCount from chrome.storage.local, if there are no usedICDCodesCount, return with error message in console
-    let usedICDCodesCount = {};
-    chrome.storage.local.get(['usedICDCodesCount']).then((result) => {
-        usedICDCodesCount = result.usedICDCodesCount || {};
-        if (Object.keys(usedICDCodesCount).length === 0) {
-            console.error('No usedICDCodesCount found in local storage.');
-            return;
-        }
+
+    let favoritedICDCodes = await favoritedICDCodesPromise;
+        favoritedICDCodes = favoritedICDCodes.favoritedICDCodes || [];
+    // sort them alphabetically
+    favoritedICDCodes.sort();
+    let lastlyUsedICDCodes = await lastlyUsedICDCodesPromise;
+        lastlyUsedICDCodes = lastlyUsedICDCodes.usedICDCodes || [];
+    // remove duplicates from lastlyUsedICDCodes leaving only the first occurrence and sort them by the order they appear in the list, not alphabetically
+    lastlyUsedICDCodes = [...new Set(lastlyUsedICDCodes)].sort((a, b) => {
+        return lastlyUsedICDCodes.indexOf(a) - lastlyUsedICDCodes.indexOf(b);
+    });
+    // limit to 50 codes
+    lastlyUsedICDCodes = lastlyUsedICDCodes.slice(0, 50);
+
+
+    if (lastlyUsedICDCodes.length === 0) {
+        console.error('No lastlyUsedICDCodes found in local storage.');
+        //return;
+    }else {
+        // for each code in the lastlyUsedICDCodes list, add a row to the new table with a button that has the code as text and a description next to it
+        lastlyUsedICDCodes.forEach(code => {
+
+            // lookup description for the code using background script, if there is no description, use an empty string
+            chrome.runtime.sendMessage({ type: 'lookupIcdDescription', code }, (response) => {
+                const description = response?.description || '';
+                const row = $('<tr>');
+                const codeCell = $('<td>').append($('<button type="button">').text(code).on('click', function() { putIcdCodeIntoInput(code, description); }));
+                const descriptionCell = $('<td>');
+                const descriptionSpan = $('<span>').text(description);
+                descriptionCell.append(descriptionSpan);
+                addFavoriteCheckbox(descriptionSpan, code, favoritedICDCodes);
+                row.append(codeCell, descriptionCell);
+                lastlyUsedTable.append(row);
+            });
+        });
+    }
+
+
+    let usedICDCodesCount = await usedICDCodesCountPromise;
+        usedICDCodesCount = usedICDCodesCount.usedICDCodesCount || {};
+    // limit to 50 codes
+    usedICDCodesCount = Object.fromEntries(Object.entries(usedICDCodesCount).slice(0, 50));
+    
+    if (Object.keys(usedICDCodesCount).length === 0) {
+        console.error('No usedICDCodesCount found in local storage.');
+        //return;
+    }else {
         // for each code in the frequentlyUsedIcdCodes list, add a row to the new table with a button that has the code as text and a description next to it
         Object.keys(usedICDCodesCount).forEach(code => {
 
@@ -124,12 +174,40 @@ function addFrequentlyUsedIcdCodes() {
                 const description = response?.description || '';
                 const row = $('<tr>');
                 const codeCell = $('<td>').append($('<button type="button">').text(code).on('click', function() { putIcdCodeIntoInput(code, description); }));
-                const descriptionCell = $('<td>').text(description);
+                const descriptionCell = $('<td>');
+                const descriptionSpan = $('<span>').text(description);
+                descriptionCell.append(descriptionSpan);
+                addFavoriteCheckbox(descriptionSpan, code, favoritedICDCodes);
                 row.append(codeCell, descriptionCell);
                 mostFrequentlyUsedTable.append(row);
             });
         });
-    });
+    }
+    
+    if (favoritedICDCodes.length === 0) {
+        console.error('No favoritedICDCodes found in local storage.');
+        
+    }else {
+        // for each code in the frequentlyUsedIcdCodes list, add a row to the new table with a button that has the code as text and a description next to it
+        favoritedICDCodes.forEach(code => {
+
+            // lookup description for the code using background script, if there is no description, use an empty string
+            chrome.runtime.sendMessage({ type: 'lookupIcdDescription', code }, (response) => {
+                const description = response?.description || '';
+                const row = $('<tr>');
+                const codeCell = $('<td>').append($('<button type="button">').text(code).on('click', function() { putIcdCodeIntoInput(code, description); }));
+                const descriptionCell = $('<td>');
+                const descriptionSpan = $('<span>').text(description);
+                descriptionCell.append(descriptionSpan);
+                addFavoriteCheckbox(descriptionSpan, code, favoritedICDCodes);
+                row.append(codeCell, descriptionCell);
+                favoritedCodesTable.append(row);
+            });
+        });
+    }
+
+
+    
 
 }
 
