@@ -4,9 +4,47 @@ div.custom-icd-div {
     overflow-x: hidden;
 }
 
+div.custom-helper-hover-popup div.custom-icd-div {
+    max-height: 180px;
+    padding-left: 10px;
+}
+
 .custom-icd-table td {
     vertical-align: top;
+
 }
+div.custom-icd-header-div {
+    border: 1px solid #4d4d4d;
+    padding: 5px;
+}
+
+div.custom-helper-hover-popup  table.custom-icd-table {
+    width: 100%;
+    overflow-y: scroll;
+    max-height: 600px;
+}
+
+div.icd-helper-hover-popup{
+    position: fixed;
+    z-index: 2147483647;
+    min-width: 160px;
+    max-width: 820px;
+    min-height: 250px;
+    max-height: 600px;
+    padding: 8px 10px;
+    border-radius: 3px;
+    background: #666666;
+    color: white;
+    font-size: 13px;
+    line-height: 1.35;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.25);
+    display: none;
+    pointer-events: auto;
+    overflow-x: auto;   
+}
+
+
+
 
 /* <label class="heart-checkbox">
   <input type="checkbox" />
