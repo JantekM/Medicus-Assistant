@@ -145,12 +145,11 @@ async function addICDHelperPanel(targetTable, codeInput = null, descriptionInput
         console.error('No lastlyUsedICDCodes found in local storage.');
         //return;
     }else {
-        // for each code in the lastlyUsedICDCodes list, add a row to the new table with a button that has the code as text and a description next to it
-        lastlyUsedICDCodes.forEach(code => {
-
-            // lookup description for the code using background script, if there is no description, use an empty string
-            chrome.runtime.sendMessage({ type: 'lookupIcdDescription', code }, (response) => {
-                const description = response?.description || '';
+        // change lastlyUsedICDCodes to be an array of unique codes, lookup their descriptions as a batch using background script, and for each code in the lastlyUsedICDCodes list, add a row to the new table with a button that has the code as text and a description next to it
+        chrome.runtime.sendMessage({ type: 'lookupIcdDescription', code: lastlyUsedICDCodes }, (response) => {
+            const descriptions = response?.description || [];
+            lastlyUsedICDCodes.forEach((code, index) => {
+                const description = descriptions[index] || '';
                 const row = $('<tr>');
                 const codeCell = $('<td>').append($('<button type="button">').text(code).on('click', function() { putIcdCodeIntoInput(code, description, codeInput, descriptionInput); }));
                 const descriptionCell = $('<td>');
@@ -161,7 +160,7 @@ async function addICDHelperPanel(targetTable, codeInput = null, descriptionInput
                 lastlyUsedTable.append(row);
             });
         });
-    }
+}
 
 
     let usedICDCodesCount = await usedICDCodesCountPromise;
@@ -174,11 +173,11 @@ async function addICDHelperPanel(targetTable, codeInput = null, descriptionInput
         //return;
     }else {
         // for each code in the frequentlyUsedIcdCodes list, add a row to the new table with a button that has the code as text and a description next to it
-        Object.keys(usedICDCodesCount).forEach(code => {
-
-            // lookup description for the code using background script, if there is no description, use an empty string
-            chrome.runtime.sendMessage({ type: 'lookupIcdDescription', code }, (response) => {
-                const description = response?.description || '';
+        const usedCodesList = Object.keys(usedICDCodesCount);
+        chrome.runtime.sendMessage({ type: 'lookupIcdDescription', code: usedCodesList }, (response) => {
+            const descriptions = response?.description || [];
+            usedCodesList.forEach((code, index) => {
+                const description = descriptions[index] || '';
                 const row = $('<tr>');
                 const codeCell = $('<td>').append($('<button type="button">').text(code).on('click', function() { putIcdCodeIntoInput(code, description, codeInput, descriptionInput); }));
                 const descriptionCell = $('<td>');
@@ -196,11 +195,10 @@ async function addICDHelperPanel(targetTable, codeInput = null, descriptionInput
         
     }else {
         // for each code in the frequentlyUsedIcdCodes list, add a row to the new table with a button that has the code as text and a description next to it
-        favoritedICDCodes.forEach(code => {
-
-            // lookup description for the code using background script, if there is no description, use an empty string
-            chrome.runtime.sendMessage({ type: 'lookupIcdDescription', code }, (response) => {
-                const description = response?.description || '';
+        chrome.runtime.sendMessage({ type: 'lookupIcdDescription', code: favoritedICDCodes }, (response) => {
+            const descriptions = response?.description || [];
+            favoritedICDCodes.forEach((code, index) => {
+                const description = descriptions[index] || '';
                 const row = $('<tr>');
                 const codeCell = $('<td>').append($('<button type="button">').text(code).on('click', function() { putIcdCodeIntoInput(code, description, codeInput, descriptionInput); }));
                 const descriptionCell = $('<td>');
@@ -401,6 +399,8 @@ function putIcdCodeIntoInput(code, description, codeInput = null, descriptionInp
         $(codeInput).eq(0).val(code);
         $(descriptionInput).each(function(index, element) {
             $(element).val(`(${code}) ${description}`);
+            // also set title to the same description
+            $(element).attr('title', description);
         });
         hidePopup();
         return;
@@ -416,6 +416,8 @@ function putIcdCodeIntoInput(code, description, codeInput = null, descriptionInp
             let descriptionInput = codeInput.nextAll('input[size="60"][readonly]').first();
             if (descriptionInput.length > 0) {
                 descriptionInput.val(`(${code}) ${description}`);
+                // also set title to the same description
+                descriptionInput.attr('title', description);
             }
             hidePopup();
             return;
@@ -655,6 +657,40 @@ async function pageIcdPopup(){
     });
 }
 
+function enhanceTOTPInput() {
+    // check if there is an input of type text and name starting with "temp_totpX" where X is a number with at least 6 digits
+    const totpInput = $('input[type="text"][name^="temp_totp"]');
+    if(totpInput.length === 0) {
+        console.debug('No TOTP input found on the page.');
+        return;
+    }
+    // check if the number of digits in the name is at least 6
+    const name = totpInput.attr('name');
+    const match = name.match(/^temp_totp(\d{6,})$/);
+    if (!match) {
+        console.debug('TOTP input name does not have at least 6 digits.');
+        return;
+    }
+    // get the number of digits from the name
+    const patientId = match[1];
+
+    // check if totpInput has a sibling of type submit and name "temp_ewus_X" where X is the same number of digits as in the totpInput name (patient ID)
+    const submitButton = $(`input[type="submit"][name="temp_ewus_${patientId}"]`);
+    if(submitButton.length === 0) {
+        console.debug('No corresponding submit button found for TOTP input.');
+        return;
+    }
+
+    // add a input change listener to the totpInput, when the value changes, if it has 6 digits, click the submit button
+    totpInput.on('input', function() {
+        const value = $(this).val();
+        if(/^\d{6}$/.test(value)) {
+            console.debug('TOTP entered, checking eWUŚ status.');
+            submitButton.trigger('click');
+        }
+    });
+}
+
 // function to set an immediate action in the local storage
 function setImmediateAction(action, secondsToExpire) {
     const expirationTime = new Date().getTime() + secondsToExpire * 100000;
@@ -725,6 +761,7 @@ function checkPage(){
     });
     addPostBtnListener();
     addICDHelperButtons();
+    enhanceTOTPInput();
     
 
     if ($('.templateEditPageTitle').length && $('.templateEditPageTitle').text().includes('Dane medyczne wizyty')) {

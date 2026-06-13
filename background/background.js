@@ -136,7 +136,10 @@ async function lookupIcdDescription(code) {
             const result = await chrome.storage.local.get('icdCodeDict');
             codeDict = result.icdCodeDict || {};
         }
-
+    // check if the code is a single code or a batch, a batch is an array of codes, if it's a batch, return an array of descriptions
+    if (Array.isArray(code)) {
+        return code.map(c => codeDict[c] || null);
+    }
 
     return codeDict[code] || null;
 }
