@@ -29,7 +29,7 @@ def create_zip_archive(zip_path):
             zipf.write('readme.md')
         
         # Add directories
-        folders = ['sites', 'styles', 'scripts', 'icons', 'data', 'background']
+        folders = ['sites', 'styles', 'scripts', 'icons', 'data', 'background', 'options']
         for folder in folders:
             if os.path.exists(folder):
                 for root, dirs, files in os.walk(folder):

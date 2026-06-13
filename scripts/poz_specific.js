@@ -40,7 +40,7 @@ function addTooltipToIcdCodes(table) {
 }
 
 
-function addFrequentlyUsedIcdCodes() {
+function addFrequentlyUsedIcdCodes(settings) {
     
 
     // the element with fixed id
@@ -66,7 +66,7 @@ function addFrequentlyUsedIcdCodes() {
     }else{ 
         addTooltipToIcdCodes(table);
     }
-    addICDHelperPanel(table);
+    addICDHelperPanel(table, null, null, settings);
     
     
 }
@@ -125,12 +125,15 @@ function addLoadMassAndHeightButton(pageElements) {
     pageElements.massInput.data('autofill_added', true);
 
 }
-function addMassAndHeightDefaultAutofill(pageElements) {
+function addMassAndHeightDefaultAutofill(pageElements, settings) {
+
+    const defaultMass = getSettingValue(settings, 'poz.defaultMassKg', 65);
+    const defaultHeight = getSettingValue(settings, 'poz.defaultHeightCm', 165);
 
     if (pageElements.heightInput.data('default_autofill_added')) return;
-    const massAndHeightAutofillBtn = $('<button type="button">').text('65/165').on('click', function() {
-        pageElements.massInput.val('65').trigger('input');
-        pageElements.heightInput.val('165').trigger('input');
+    const massAndHeightAutofillBtn = $('<button type="button">').text(`${defaultMass}/${defaultHeight}`).on('click', function() {
+        pageElements.massInput.val(String(defaultMass)).trigger('input');
+        pageElements.heightInput.val(String(defaultHeight)).trigger('input');
     });
     pageElements.heightInput.after(massAndHeightAutofillBtn);
     // create a button to set the visit type to "Teleporada"
@@ -148,7 +151,16 @@ function addMassAndHeightDefaultAutofill(pageElements) {
     pageElements.heightInput.data('default_autofill_added', true);
 }
 
-function addVisitTypeAutofillButtons(pageElements) {
+function addVisitTypeAutofillButtons(pageElements, settings) {
+    const teleporadaBadanieSymbolLimit = getSettingValue(settings, 'poz.teleporadaBadanieSymbolLimit', 10);
+    const teleporadaWywiadSymbolLimit = getSettingValue(settings, 'poz.teleporadaWywiadSymbolLimit', 10);
+    const receptowaBadanieSymbolLimit = getSettingValue(settings, 'poz.receptowaBadanieSymbolLimit', 20);
+    const receptowaWywiadSymbolLimit = getSettingValue(settings, 'poz.receptowaWywiadSymbolLimit', 20);
+    const teleporadaDefaultNote = getSettingValue(settings, 'poz.teleporadaDefaultNote', 'Teleporada - nie badano przedmiotowo');
+    const teleporadaDefaultHistoryNote = getSettingValue(settings, 'poz.teleporadaDefaultHistoryNote', '');
+    const receptowaDefaultNote = getSettingValue(settings, 'poz.receptowaDefaultNote', 'Wizyta receptowa - nie badano przedmiotowo');
+    const receptowaDefaultHistoryNote = getSettingValue(settings, 'poz.receptowaDefaultHistoryNote', '');
+
     const visitTypeCell = $('#kontakt_typ_porady_all');
     if (visitTypeCell.length != 1) return; // No cell found
 
@@ -210,8 +222,8 @@ function addVisitTypeAutofillButtons(pageElements) {
         }
         
         console.debug('POZ Gab button clicked, setting visit type and filling in details.');
-        // set text of badaniePrzedmiotoweTextArea to empty if the current text is shorter than 10 characters
-        if (pageElements.badaniePrzedmiotoweTextArea.val().trim().length < 10) {
+        // clear badaniePrzedmiotoweTextArea if current text length is within configured limit
+        if (pageElements.badaniePrzedmiotoweTextArea.val().trim().length <= 10) {
             pageElements.badaniePrzedmiotoweTextArea.val('');
             console.debug('Cleared badaniePrzedmiotoweTextArea due to short content.');
         }
@@ -275,10 +287,14 @@ function addVisitTypeAutofillButtons(pageElements) {
         }
         
         console.debug('POZ Teleporada button clicked, setting visit type and filling in details.');
-        // set text of badaniePrzedmiotoweTextArea to empty if the current text is shorter than 10 characters
-        if (pageElements.badaniePrzedmiotoweTextArea.val().trim().length < 10) {
-            pageElements.badaniePrzedmiotoweTextArea.val('Teleporada - nie badano przedmiotowo');
+        // set badaniePrzedmiotoweTextArea if current text length is within configured limit
+        if (pageElements.badaniePrzedmiotoweTextArea.val().trim().length <= teleporadaBadanieSymbolLimit) {
+            pageElements.badaniePrzedmiotoweTextArea.val(teleporadaDefaultNote);
             console.debug('Cleared badaniePrzedmiotoweTextArea due to short content.');
+        }
+        if (pageElements.wywiadTextArea.val().trim().length <= teleporadaWywiadSymbolLimit) {
+            pageElements.wywiadTextArea.val(teleporadaDefaultHistoryNote);
+            console.debug('Set wywiadTextArea due to short content.');
         }
 
         // set the visit type to "POZTELE"
@@ -339,10 +355,14 @@ function addVisitTypeAutofillButtons(pageElements) {
         }
         
         console.debug('POZ Receptowa button clicked, setting visit type and filling in details.');
-        // set text of badaniePrzedmiotoweTextArea to empty if the current text is shorter than 20 characters
-        if (pageElements.badaniePrzedmiotoweTextArea.val().trim().length < 20) {
-            pageElements.badaniePrzedmiotoweTextArea.val('Wizyta receptowa - nie badano przedmiotowo');
+        // set badaniePrzedmiotoweTextArea if current text length is within configured limit
+        if (pageElements.badaniePrzedmiotoweTextArea.val().trim().length <= receptowaBadanieSymbolLimit) {
+            pageElements.badaniePrzedmiotoweTextArea.val(receptowaDefaultNote);
             console.debug('Cleared badaniePrzedmiotoweTextArea due to short content.');
+        }
+        if (pageElements.wywiadTextArea.val().trim().length <= receptowaWywiadSymbolLimit) {
+            pageElements.wywiadTextArea.val(receptowaDefaultHistoryNote);
+            console.debug('Set wywiadTextArea due to short content.');
         }
 
         // set the visit type to "REC"
@@ -406,8 +426,8 @@ function addVisitTypeAutofillButtons(pageElements) {
         }
         
         console.debug('POZ Dom button clicked, setting visit type and filling in details.');
-        // set text of badaniePrzedmiotoweTextArea to empty if the current text is shorter than 20 characters
-        if (pageElements.badaniePrzedmiotoweTextArea.val().trim().length < 20) {
+        // clear badaniePrzedmiotoweTextArea if current text length is within configured limit
+        if (pageElements.badaniePrzedmiotoweTextArea.val().trim().length <= 20) {
             pageElements.badaniePrzedmiotoweTextArea.val('');
         }
 
@@ -437,12 +457,15 @@ function addVisitTypeAutofillButtons(pageElements) {
 
 }
 
-function addMassAndHeightChecker(pageElements) {
+function addMassAndHeightChecker(pageElements, settings) {
+    const defaultMass = String(getSettingValue(settings, 'poz.defaultMassKg', 65));
+    const defaultHeight = String(getSettingValue(settings, 'poz.defaultHeightCm', 165));
+
     const massInput = $('input[name="temp_pom_waga"]');
     const heightInput = $('input[name="temp_pom_wzrost"]');
     if (massInput.data('checker_added') || heightInput.data('checker_added')) return; // Checker already added
     const checkValues = function() {
-        if (massInput.val()==='65' && heightInput.val()==='165') {
+        if (massInput.val() === defaultMass && heightInput.val() === defaultHeight) {
             massInput.css('background-color', '#d1736e').css('border', 'solid 2px red');
             heightInput.css('background-color', '#d1736e').css('border', 'solid 2px red');
         }else{
@@ -461,7 +484,7 @@ function addMassAndHeightChecker(pageElements) {
     heightInput.data('checker_added', true);
 }
 
-function pageDaneMedyczne(){
+function pageDaneMedyczne(settings){
     //wywiad: find textarea with name "skladniki_procedury_1702" and check if there is only one
     const wywiadTextArea = $('textarea[name="skladniki_procedury_1702"]');
     if (wywiadTextArea.length != 1) return; // No textarea found
@@ -534,12 +557,24 @@ function pageDaneMedyczne(){
     };
 
     console.log('Page elements found:', pageElements);
-    addVisitTypeAutofillButtons(pageElements);
-    addMassAndHeightChecker(pageElements);
-    addMassAndHeightDefaultAutofill(pageElements);
-    addLoadMassAndHeightButton(pageElements);
-    enhancePhoneNumbers();
-    addFrequentlyUsedIcdCodes();
+    if (getSettingValue(settings, 'features.enablePozVisitTypeButtons', true)) {
+        addVisitTypeAutofillButtons(pageElements, settings);
+    }
+    if (getSettingValue(settings, 'features.enableMassHeightTools', true)) {
+        addMassAndHeightChecker(pageElements, settings);
+        addMassAndHeightDefaultAutofill(pageElements, settings);
+        addLoadMassAndHeightButton(pageElements);
+    }
+    if (getSettingValue(settings, 'features.enablePhoneNumberEnhancement', true)) {
+        enhancePhoneNumbers();
+    }
+    const isIcdHelperEnabled = getSettingValue(settings, 'features.enableIcdHelper', true);
+    const isIcdRecentCodesEnabled = getSettingValue(settings, 'features.enableIcdRecentCodes', true);
+    const isIcdFavoriteCodesEnabled = getSettingValue(settings, 'features.enableIcdFavoriteCodes', true);
+
+    if (isIcdHelperEnabled && (isIcdRecentCodesEnabled || isIcdFavoriteCodesEnabled)) {
+        addFrequentlyUsedIcdCodes(settings);
+    }
 }
 
 function setToPorada(){

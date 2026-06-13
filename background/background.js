@@ -153,6 +153,10 @@ function listen() {
             return true; // Indicates that the response will be sent asynchronously
         }
     });
+
+    chrome.action.onClicked.addListener(() => {
+        chrome.runtime.openOptionsPage();
+    });
 }
 
 async function testPerformance() {

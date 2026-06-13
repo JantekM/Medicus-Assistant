@@ -1,5 +1,11 @@
-async function pageNoweZlecenieEdycja(){ //plan dataczas page
-    addTomorrowMorningButtons();
+async function pageNoweZlecenieEdycja(settings){ //plan dataczas page
+    const isTomorrowButtonEnabled = !globalThis.MASettings || !settings
+        ? true
+        : Boolean(globalThis.MASettings.getPath(settings, 'features.enableTomorrowMorningButton'));
+
+    if (isTomorrowButtonEnabled) {
+        addTomorrowMorningButtons(settings);
+    }
 
     const action = await getImmediateAction();
     if (action) {
