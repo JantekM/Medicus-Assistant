@@ -100,6 +100,273 @@ function addTomorrowMorningButtons(settings) {
 
 }
 
+function parseLastRequestedDateInfo(rawDateText) {
+    if (!rawDateText) return null;
+
+    const normalizedText = String(rawDateText)
+        .replace(/&nbsp;/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+    if (!normalizedText) return null;
+
+    const extractedDateTextMatch = normalizedText.match(/(\d{4}[.\-/]\d{1,2}[.\-/]\d{1,2}|\d{1,2}[.\-/]\d{1,2}[.\-/]\d{4})(?:\s+\d{1,2}:\d{1,2}(?::\d{1,2})?)?/);
+    const candidateDateText = extractedDateTextMatch ? extractedDateTextMatch[0] : normalizedText;
+
+    const formats = [
+        /^(\d{4})[.\-/](\d{1,2})[.\-/](\d{1,2})(?:\s+(\d{1,2}):(\d{1,2})(?::\d{1,2})?)?$/,
+        /^(\d{1,2})[.\-/](\d{1,2})[.\-/](\d{4})(?:\s+(\d{1,2}):(\d{1,2})(?::\d{1,2})?)?$/
+    ];
+
+    for (let i = 0; i < formats.length; i += 1) {
+        const match = candidateDateText.match(formats[i]);
+        if (!match) continue;
+
+        let year = null;
+        let month = null;
+        let day = null;
+        if (i === 0) {
+            year = Number(match[1]);
+            month = Number(match[2]);
+            day = Number(match[3]);
+        } else {
+            day = Number(match[1]);
+            month = Number(match[2]);
+            year = Number(match[3]);
+        }
+
+        const parsedDate = new Date(year, month - 1, day, 0, 0, 0, 0);
+        if (
+            Number.isNaN(parsedDate.getTime()) ||
+            parsedDate.getFullYear() !== year ||
+            parsedDate.getMonth() !== month - 1 ||
+            parsedDate.getDate() !== day
+        ) {
+            continue;
+        }
+
+        const paddedMonth = String(month).padStart(2, '0');
+        const paddedDay = String(day).padStart(2, '0');
+        return {
+            dateValue: parsedDate.getTime(),
+            dateKey: `${year}-${paddedMonth}-${paddedDay}`,
+            dateLabel: `${year}-${paddedMonth}-${paddedDay}`
+        };
+    }
+
+    return null;
+}
+
+function getMostRecentRequestedTestsRows() {
+    const anchor = $('#profile_zestawybadańwyszukajidodajbadanie_ctrlf_począteknazwy');
+    if (anchor.length !== 1) return $();
+
+    const th = anchor.parent('th');
+    if (th.length !== 1 || !th.hasClass('templateEditTableSection')) return $();
+
+    const trDividingLine = th.parent('tr');
+    if (trDividingLine.length !== 1 || trDividingLine.hasClass('rowedit')) return $();
+
+    const trAutoPackages = trDividingLine.next('tr.rowedit');
+    if (trAutoPackages.length !== 1) return $();
+
+    return trAutoPackages.add(trAutoPackages.nextAll('tr.rowedit'));
+}
+
+function collectMostRecentRequestedTestsData() {
+    const rows = getMostRecentRequestedTestsRows();
+    if (rows.length === 0) return null;
+
+    const candidates = [];
+    const seenCheckboxes = new Set();
+
+    rows.each(function () {
+        const $row = $(this);
+        const $mainCheckboxes = $row.find('input[type="checkbox"][name^="wykonanie_poz_pak_"]');
+        if ($mainCheckboxes.length === 0) return;
+
+        $mainCheckboxes.each(function () {
+            const mainCheckbox = $(this);
+            const checkboxName = mainCheckbox.attr('name') || '';
+            if (/^wykonanie_poz_cito_/i.test(checkboxName)) return;
+            if (seenCheckboxes.has(this)) return;
+
+            const $cell = mainCheckbox.closest('td');
+            const $lineRow = $cell.closest('tr');
+            if ($lineRow.length !== 1) return;
+
+            const $lineTds = $lineRow.find('td');
+            if ($lineTds.length < 2) return;
+
+            const $dateCell = $($lineTds[1]);
+            const $dateNode = $dateCell.find('p').first();
+            const rawDateLabel = ($dateNode.length ? $dateNode.text() : $dateCell.text()).trim();
+            const prefixMatch = rawDateLabel.match(/Ostatnio zlecono:\s*(.+)$/i);
+            if (!prefixMatch) return;
+
+            const dateText = prefixMatch[1].trim();
+            const parsed = parseLastRequestedDateInfo(dateText);
+            if (!parsed) return;
+
+            seenCheckboxes.add(this);
+            candidates.push({
+                mainCheckbox,
+                dateValue: parsed.dateValue,
+                dateKey: parsed.dateKey,
+                dateLabel: parsed.dateLabel
+            });
+        });
+    });
+
+    if (candidates.length === 0) return null;
+
+    const mostRecentDateValue = candidates.reduce((maxValue, item) => {
+        return Math.max(maxValue, item.dateValue);
+    }, Number.NEGATIVE_INFINITY);
+
+    const targets = candidates.filter((item) => item.dateValue === mostRecentDateValue);
+    if (targets.length === 0) return null;
+
+    return {
+        targets,
+        dateLabel: targets[0].dateLabel,
+        dateKey: targets[0].dateKey
+    };
+}
+
+function setMostRecentTestsButtonText($button, dateLabel = null) {
+    const label = dateLabel ? `Ostatnio zlecone (${dateLabel})` : 'Ostatnio zlecone';
+    if ($button.is('input')) {
+        $button.val(label);
+    } else {
+        $button.text(label);
+    }
+}
+
+function refreshMostRecentTestsButtonText() {
+    const $button = $('.ma-lastly-requested-tests-btn').first();
+    if ($button.length !== 1) return;
+
+    const data = collectMostRecentRequestedTestsData();
+    setMostRecentTestsButtonText($button, data ? data.dateLabel : null);
+
+    const hasDate = Boolean(data);
+    $button.prop('disabled', !hasDate);
+    $button.attr(
+        'title',
+        hasDate
+            ? 'Zaznacz badania z najnowszej daty "Ostatnio zlecono"'
+            : 'Brak dat "Ostatnio zlecono" do zaznaczenia'
+    );
+}
+
+function selectMostRecentlyRequestedTestsByDate() {
+    const data = collectMostRecentRequestedTestsData();
+    if (!data) {
+        console.log('No parseable "Ostatnio zlecono" dates found.');
+        return { selectedCount: 0, dateLabel: null };
+    }
+
+    const targetDateKey = data.dateKey;
+    let newlySelected = 0;
+
+    for (let pass = 0; pass < 10; pass += 1) {
+        const passData = collectMostRecentRequestedTestsData();
+        if (!passData) break;
+
+        const targetsForDate = passData.targets.filter((target) => target.dateKey === targetDateKey);
+        if (targetsForDate.length === 0) break;
+
+        const uncheckedTargets = targetsForDate.filter((target) => !target.mainCheckbox.prop('checked'));
+        if (uncheckedTargets.length === 0) break;
+
+        // Prefer real click so page scripts attached to checkbox onclick run.
+        uncheckedTargets.forEach((target) => {
+            target.mainCheckbox.trigger('click');
+        });
+
+        // Fallback when click handlers do not toggle the checkbox.
+        uncheckedTargets.forEach((target) => {
+            if (!target.mainCheckbox.prop('checked')) {
+                target.mainCheckbox.prop('checked', true).trigger('change');
+            }
+        });
+
+        newlySelected += uncheckedTargets.length;
+    }
+
+    return {
+        selectedCount: newlySelected,
+        dateLabel: data.dateLabel
+    };
+}
+
+function refreshDuplicateHighlightAfterAutoSelection() {
+    if (typeof applyDiagnosticTestDuplicateHighlight !== 'function') return;
+
+    let attempts = 0;
+    const maxAttempts = 12;
+    const intervalMs = 70;
+
+    const refresh = () => {
+        applyDiagnosticTestDuplicateHighlight();
+        attempts += 1;
+        if (attempts < maxAttempts) {
+            setTimeout(refresh, intervalMs);
+        }
+    };
+
+    refresh();
+}
+
+function addMostRecentRequestedTestsButton() {
+    if ($('.ma-lastly-requested-tests-btn').length) {
+        refreshMostRecentTestsButtonText();
+        return;
+    }
+
+    const $button = $('<button type="button">')
+        .addClass('ma-lastly-requested-tests-btn')
+        .attr('title', 'Zaznacz badania z najnowszej daty "Ostatnio zlecono"')
+        .on('click', function () {
+            const result = selectMostRecentlyRequestedTestsByDate();
+            setMostRecentTestsButtonText($button, result.dateLabel);
+            if (typeof initDiagnosticTestDuplicateHighlighting === 'function') {
+                initDiagnosticTestDuplicateHighlighting();
+            } else if (typeof applyDiagnosticTestDuplicateHighlight === 'function') {
+                applyDiagnosticTestDuplicateHighlight();
+            }
+            refreshDuplicateHighlightAfterAutoSelection();
+            console.log('Selected tests from latest "Ostatnio zlecono" date:', result.selectedCount, result.dateLabel || 'n/a');
+        });
+
+    const $okButton = $('button[type="submit"][name="btn_ok"], input[type="submit"][name="btn_ok"]').first();
+    if ($okButton.length === 1) {
+        $okButton.after($button);
+        $okButton.after('&nbsp;');
+    } else {
+        // Fallback for layouts without standard header action buttons.
+        const $span = $('#skierowanie_plan_dataczas_all');
+        if ($span.length !== 1) return;
+        const $nowButton = $span.find('input[type="button"]').filter(function () {
+            return $(this).val() === 'Teraz';
+        }).first();
+        if ($nowButton.length !== 1) return;
+        $nowButton.after($button);
+        $nowButton.after('&nbsp;');
+    }
+
+    refreshMostRecentTestsButtonText();
+
+    let refreshAttempts = 0;
+    const refreshTimer = setInterval(() => {
+        refreshMostRecentTestsButtonText();
+        refreshAttempts += 1;
+        if (refreshAttempts >= 10 || $('.ma-lastly-requested-tests-btn').length === 0) {
+            clearInterval(refreshTimer);
+        }
+    }, 250);
+}
+
 async function addICDHelperPanel(targetTable, codeInput = null, descriptionInput = null, settings = null) {
     const resolvedSettings = settings || (globalThis.MASettings ? await globalThis.MASettings.getMergedSettings() : null);
     const { isIcdRecentCodesEnabled, isIcdFavoriteCodesEnabled } = getIcdFeatureFlags(resolvedSettings);
@@ -781,6 +1048,137 @@ function clearImmediateAction() {
     
 }
 
+function normalizeDiagnosticTestLabel(labelText) {
+    if (!labelText) return '';
+    return String(labelText)
+        .replace(/\bCITO\b/gi, ' ')
+        .replace(/\s+/g, ' ')
+        .trim()
+        .toLowerCase();
+}
+
+function getDiagnosticTestRows() {
+    const anchor = $('#profile_zestawybadańwyszukajidodajbadanie_ctrlf_począteknazwy');
+    if (anchor.length !== 1) return $();
+
+    const th = anchor.parent('th');
+    if (th.length !== 1 || !th.hasClass('templateEditTableSection')) return $();
+
+    const trDividingLine = th.parent('tr');
+    if (trDividingLine.length !== 1 || trDividingLine.hasClass('rowedit')) return $();
+
+    const trAutoPackages = trDividingLine.next('tr.rowedit');
+    if (trAutoPackages.length !== 1) return $();
+
+    return trAutoPackages.nextAll('tr.rowedit');
+}
+
+function collectDiagnosticTestGroups() {
+    const groups = new Map();
+    const rows = getDiagnosticTestRows();
+
+    rows.each(function () {
+        const $row = $(this);
+        const $innerRow = $row.find('tr').first();
+        if ($innerRow.length !== 1) return;
+
+        const $tds = $innerRow.find('td');
+        if ($tds.length !== 3) return;
+
+        const $firstCell = $($tds[0]);
+        const mainCheckbox = $firstCell.find('input[type="checkbox"]').first();
+        const $label = $firstCell.find('label').first();
+        if (mainCheckbox.length !== 1 || $label.length !== 1) return;
+
+        const normalizedLabel = normalizeDiagnosticTestLabel($label.text());
+        if (!normalizedLabel) return;
+
+        if (!groups.has(normalizedLabel)) {
+            groups.set(normalizedLabel, []);
+        }
+        groups.get(normalizedLabel).push({
+            $row,
+            mainCheckbox
+        });
+    });
+
+    return groups;
+}
+
+function applyDiagnosticTestDuplicateHighlight() {
+    const groups = collectDiagnosticTestGroups();
+
+    groups.forEach((items) => {
+        if (items.length < 2) return;
+
+        const checkedCount = items.filter((item) => item.mainCheckbox.prop('checked')).length;
+        const conflict = checkedCount >= 2;
+        const anyChecked = checkedCount >= 1;
+
+        items.forEach((item) => {
+            const isChecked = item.mainCheckbox.prop('checked');
+            item.$row.toggleClass('ma-diagnostic-test-duplicate-muted', anyChecked && !isChecked);
+            item.$row.toggleClass('ma-diagnostic-test-duplicate-conflict', conflict && isChecked);
+        });
+    });
+}
+
+function initDiagnosticTestDuplicateHighlighting() {
+    const rows = getDiagnosticTestRows();
+    if (rows.length === 0) return;
+
+    if (!document.documentElement.dataset.maDiagnosticDuplicatesReady) {
+        $(document)
+            .off('change.MA_diagnosticDuplicates')
+            .on('change.MA_diagnosticDuplicates', 'tr.rowedit input[type="checkbox"]', function () {
+                const $checkbox = $(this);
+                if (!$checkbox.is(':checkbox')) return;
+
+                const $row = $checkbox.closest('tr.rowedit');
+                if ($row.length !== 1) return;
+
+                const $innerRow = $row.find('tr').first();
+                if ($innerRow.length !== 1) return;
+
+                const mainCheckbox = $innerRow.find('td').first().find('input[type="checkbox"]').first();
+                if (mainCheckbox.length !== 1 || mainCheckbox[0] !== $checkbox[0]) return;
+
+                applyDiagnosticTestDuplicateHighlight();
+            });
+
+        const observerTarget = rows.first().closest('table')[0] || rows.first()[0].parentElement || document.body;
+        const refreshLater = (() => {
+            let timer = null;
+            return () => {
+                if (timer) clearTimeout(timer);
+                timer = setTimeout(() => {
+                    applyDiagnosticTestDuplicateHighlight();
+                }, 0);
+            };
+        })();
+
+        const observer = new MutationObserver(() => {
+            refreshLater();
+        });
+        observer.observe(observerTarget, { childList: true, subtree: true });
+
+        let refreshAttempts = 0;
+        const refreshTimer = setInterval(() => {
+            applyDiagnosticTestDuplicateHighlight();
+            refreshAttempts += 1;
+            if (refreshAttempts >= 8) {
+                clearInterval(refreshTimer);
+            }
+        }, 200);
+
+        document.documentElement.dataset.maDiagnosticDuplicatesReady = '1';
+        document.documentElement.dataset.maDiagnosticDuplicatesObserver = '1';
+        globalThis.MADiagnosticDuplicateObserver = observer;
+    }
+
+    applyDiagnosticTestDuplicateHighlight();
+}
+
 async function checkPage(){
     //function to check if the loaded page is from Medicus
     function isMedicusPage() {
@@ -860,7 +1258,9 @@ async function checkPage(){
     // check if the page contains span with id "skierowanie_plan_dataczas_all"
     if ($('#skierowanie_plan_dataczas_all').length) {
         console.log('Loading content for nowe-zlecenie-edycja page...');
+        addMostRecentRequestedTestsButton();
         pageNoweZlecenieEdycja(settings); 
+        initDiagnosticTestDuplicateHighlighting();
         return;
     }
 

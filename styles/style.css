@@ -68,3 +68,36 @@ div.icd-helper-hover-popup{
   content: "♥";
   color: crimson;
 }
+
+tr.ma-diagnostic-test-duplicate-muted {
+  opacity: 0.45;
+}
+
+tr.ma-diagnostic-test-duplicate-muted label,
+tr.ma-diagnostic-test-duplicate-muted td {
+  color: #666;
+}
+
+tr.ma-diagnostic-test-duplicate-conflict {
+  background-color: #ffd5d5;
+}
+
+tr.ma-diagnostic-test-duplicate-conflict label,
+tr.ma-diagnostic-test-duplicate-conflict td {
+  color: #b30000;
+  font-weight: bold;
+}
+
+.ma-lastly-requested-tests-btn {
+  margin-left: 6px;
+  padding: 5px 10px;
+  min-height: 30px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.ma-lastly-requested-tests-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
