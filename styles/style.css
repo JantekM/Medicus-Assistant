@@ -70,7 +70,7 @@ div.icd-helper-hover-popup{
 }
 
 tr.ma-diagnostic-test-duplicate-muted {
-  opacity: 0.45;
+  opacity: var(--ma-duplicate-muted-opacity, 0.45);
 }
 
 tr.ma-diagnostic-test-duplicate-muted label,

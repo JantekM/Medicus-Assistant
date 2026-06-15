@@ -1,7 +1,21 @@
 async function pageNoweZlecenieEdycja(settings){ //plan dataczas page
+    const getSetting = (path, fallback) => {
+        if (!globalThis.MASettings || !settings) return fallback;
+        const value = globalThis.MASettings.getPath(settings, path);
+        return value === undefined ? fallback : value;
+    };
+
     const isTomorrowButtonEnabled = !globalThis.MASettings || !settings
         ? true
-        : Boolean(globalThis.MASettings.getPath(settings, 'features.enableTomorrowMorningButton'));
+        : Boolean(globalThis.MASettings.resolveFeatureState
+            ? globalThis.MASettings.resolveFeatureState(settings, 'features.enableTomorrowMorningButton').effective
+            : getSetting('features.enableTomorrowMorningButton', true));
+
+    const isAutoFillRequestedTestsEnabled = !globalThis.MASettings || !settings
+        ? true
+        : Boolean(globalThis.MASettings.resolveFeatureState
+            ? globalThis.MASettings.resolveFeatureState(settings, 'features.enableAutoFillRequestedTests').effective
+            : getSetting('features.enableAutoFillRequestedTests', true));
 
     if (isTomorrowButtonEnabled) {
         addTomorrowMorningButtons(settings);
@@ -12,23 +26,39 @@ async function pageNoweZlecenieEdycja(settings){ //plan dataczas page
         console.log('Immediate action found:', action);
         // check if the action is "duplicateRequest"
         if (action === 'duplicateRequest') {
-            const id = chrome.storage.local.get('duplicateRequestId').then((result) => {
-                return result.duplicateRequestId;
-            });
             //const requestedTests = JSON.parse(localStorage.getItem('requestedTests'));
             const requestedTests = await chrome.storage.local.get('requestedTests').then((result) => {
                 return result.requestedTests;
             });
             console.log('Filling tests:', requestedTests);
             // call the function to fill in the form with the requested tests
-            fillInFormWithRequestedTests(requestedTests);
+            if (isAutoFillRequestedTestsEnabled) {
+                fillInFormWithRequestedTests(requestedTests, settings);
+            }
             // clear the immediate action
             //clearImmediateAction();
         }
     }
 }
 
-function fillInFormWithRequestedTests(requestedTests) {
+function fillInFormWithRequestedTests(requestedTests, settings) {
+    const getSetting = (path, fallback) => {
+        if (!globalThis.MASettings || !settings) return fallback;
+        const value = globalThis.MASettings.getPath(settings, path);
+        return value === undefined ? fallback : value;
+    };
+
+    const shouldCopyDescription = Boolean(getSetting('autofill.copyDescription', true));
+    const shouldCopyIcdCode = Boolean(getSetting('autofill.copyIcdCode', true));
+    const shouldApplyDefaultTime = Boolean(getSetting('autofill.applyDefaultTime', true));
+    const shouldCopySelectedTests = Boolean(getSetting('autofill.copySelectedTests', true));
+    const shouldCopyCitoFlag = Boolean(getSetting('autofill.copyCitoFlag', true));
+    const strictTestNameMatch = Boolean(getSetting('autofill.strictTestNameMatch', false));
+
+    if (!shouldCopyDescription && !shouldCopyIcdCode && !shouldApplyDefaultTime && !shouldCopySelectedTests) {
+        return;
+    }
+
     //first, find the div with id "profile_zestawybadańwyszukajidodajbadanie_ctrlf_począteknazwy" and check if it exists
     const div_ctrl_f = $('#profile_zestawybadańwyszukajidodajbadanie_ctrlf_począteknazwy');
     if (div_ctrl_f.length === 0) return; // No div found
@@ -56,7 +86,7 @@ function fillInFormWithRequestedTests(requestedTests) {
     const requestDescription = $('textarea[name="skierowanie_opis_skierowania"]');
     if (requestDescription.length !== 1) return; // No textarea found or more than one found
     //if the textarea is empty, fill it with the additionalInfo from requestedTests
-    if (requestDescription.val().trim() === '' && requestedTests && requestedTests.additionalInfo) {
+    if (shouldCopyDescription && requestDescription.val().trim() === '' && requestedTests && requestedTests.additionalInfo) {
         requestDescription.val(requestedTests.additionalInfo);
     }
 
@@ -65,7 +95,7 @@ function fillInFormWithRequestedTests(requestedTests) {
     const icd10Input = $('input[name="skierowanie_kod_icd10"]');
     if (icd10Input.length !== 1) return; // No input found or more than one found
     // if it's empty, fill it with the icd10 code from requestedTests
-    if (icd10Input.val().trim() === '' && requestedTests && requestedTests.icd10) {
+    if (shouldCopyIcdCode && icd10Input.val().trim() === '' && requestedTests && requestedTests.icd10) {
         // get ICD code from trimming the icd10 code from requestedTests by getting the text before first space
         const icd10Code = requestedTests.icd10.split(' ')[0].trim();
         // set the value of the input to the icd10 code
@@ -77,13 +107,19 @@ function fillInFormWithRequestedTests(requestedTests) {
     const timeInputButton = $('input[name="skierowanie_plan_dataczas_default_values_button"]');
     if (timeInputButton.length !== 2) return; // No input found or more than one found
     // now click it
-    timeInputButton[1].click();
+    if (shouldApplyDefaultTime) {
+        timeInputButton[1].click();
+    }
 
     // setNowskierowanie_plan_dataczas();
 
 
 
     // for each following tags, find its children with class "templateEditTableSection" and check if it has a class "templateEditTableSection" (include the index of the tr tag in the function)
+
+    if (!shouldCopySelectedTests || !requestedTests || !Array.isArray(requestedTests.testedParameters)) {
+        return;
+    }
 
     tr_tests.each(function(index) {
         console.log('Checking tr tag with index:', index);
@@ -133,8 +169,13 @@ function fillInFormWithRequestedTests(requestedTests) {
         // // see if you can find a test in testsList with the fullName equal to label_text
         // const test = testsList.find(test => test.fullName === label_text);
 
-        const requestedTest = requestedTests.testedParameters.find(test => {
-            trimSpaces(test.fullName.replace(' CITO ')) === label_text
+        const normalizedLabel = trimSpaces(label_text).toLowerCase();
+        const requestedTest = requestedTests.testedParameters.find((test) => {
+            const normalizedRequested = trimSpaces(String(test.fullName || '').replace(' CITO ', ' ')).toLowerCase();
+            if (strictTestNameMatch) {
+                return normalizedRequested === normalizedLabel;
+            }
+            return normalizedRequested === normalizedLabel || normalizedRequested.includes(normalizedLabel) || normalizedLabel.includes(normalizedRequested);
         });
         // if requestedTest is not found, return
         if (!requestedTest) return; // No requestedTest found
@@ -147,7 +188,7 @@ function fillInFormWithRequestedTests(requestedTests) {
             main_checkbox.prop('checked', true);
         }
         // if the requestedTest has a cito property, set the cito checkbox to checked if it is not already checked
-        if (requestedTest.isCITO && !cito_checkbox.prop('checked')) {
+        if (shouldCopyCitoFlag && requestedTest.isCITO && !cito_checkbox.prop('checked')) {
             cito_checkbox.prop('checked', true);
         }
 

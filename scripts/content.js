@@ -7,6 +7,39 @@ function getSettingValue(settings, path, fallback) {
     return value === undefined ? fallback : value;
 }
 
+let MA_ACTIVE_SETTINGS = null;
+
+function setActiveSettings(settings) {
+    MA_ACTIVE_SETTINGS = settings || null;
+}
+
+function getActiveSettings() {
+    return MA_ACTIVE_SETTINGS;
+}
+
+function getActiveSettingValue(path, fallback) {
+    return getSettingValue(getActiveSettings(), path, fallback);
+}
+
+function getFeatureState(settings, featurePath, fallback = true) {
+    if (!globalThis.MASettings) {
+        const requested = Boolean(fallback);
+        return { requested, effective: requested, reasons: [] };
+    }
+
+    if (typeof globalThis.MASettings.resolveFeatureState === 'function') {
+        return globalThis.MASettings.resolveFeatureState(settings || {}, featurePath);
+    }
+
+    const requested = Boolean(getSettingValue(settings, featurePath, fallback));
+    return { requested, effective: requested, reasons: [] };
+}
+
+function isFeatureEnabled(settings, featurePath, fallback = true) {
+    const state = getFeatureState(settings, featurePath, fallback);
+    return Boolean(state.effective);
+}
+
 function getIcdFeatureFlags(settings) {
     const isIcdHelperRequested = getSettingValue(settings, 'features.enableIcdHelper', true);
     const isIcdRecentCodesEnabled = getSettingValue(settings, 'features.enableIcdRecentCodes', true);
@@ -234,7 +267,11 @@ function collectMostRecentRequestedTestsData() {
 }
 
 function setMostRecentTestsButtonText($button, dateLabel = null) {
-    const label = dateLabel ? `Ostatnio zlecone (${dateLabel})` : 'Ostatnio zlecone';
+    const baseLabel = String(getActiveSettingValue('requestedTests.buttonBaseLabel', 'Ostatnio zlecone') || 'Ostatnio zlecone').trim() || 'Ostatnio zlecone';
+    const labelModeRaw = String(getActiveSettingValue('requestedTests.buttonLabelMode', 'date') || 'date').trim().toLowerCase();
+    const includeDate = labelModeRaw !== 'static';
+    const label = includeDate && dateLabel ? `${baseLabel} (${dateLabel})` : baseLabel;
+
     if ($button.is('input')) {
         $button.val(label);
     } else {
@@ -250,7 +287,8 @@ function refreshMostRecentTestsButtonText() {
     setMostRecentTestsButtonText($button, data ? data.dateLabel : null);
 
     const hasDate = Boolean(data);
-    $button.prop('disabled', !hasDate);
+    const disableWithoutDate = getActiveSettingValue('requestedTests.buttonDisableWhenNoDate', true);
+    $button.prop('disabled', disableWithoutDate ? !hasDate : false);
     $button.attr(
         'title',
         hasDate
@@ -302,10 +340,11 @@ function selectMostRecentlyRequestedTestsByDate() {
 
 function refreshDuplicateHighlightAfterAutoSelection() {
     if (typeof applyDiagnosticTestDuplicateHighlight !== 'function') return;
+    if (!isFeatureEnabled(getActiveSettings(), 'features.enableDuplicateTestHighlighting', true)) return;
 
     let attempts = 0;
-    const maxAttempts = 12;
-    const intervalMs = 70;
+    const maxAttempts = Math.max(1, Number(getActiveSettingValue('duplicateHighlight.refreshAttempts', 8)) || 8);
+    const intervalMs = Math.max(10, Number(getActiveSettingValue('duplicateHighlight.refreshIntervalMs', 200)) || 200);
 
     const refresh = () => {
         applyDiagnosticTestDuplicateHighlight();
@@ -319,6 +358,11 @@ function refreshDuplicateHighlightAfterAutoSelection() {
 }
 
 function addMostRecentRequestedTestsButton() {
+    if (!isFeatureEnabled(getActiveSettings(), 'features.enableRecentRequestedTestsButton', true)) {
+        $('.ma-lastly-requested-tests-btn').remove();
+        return;
+    }
+
     if ($('.ma-lastly-requested-tests-btn').length) {
         refreshMostRecentTestsButtonText();
         return;
@@ -357,14 +401,16 @@ function addMostRecentRequestedTestsButton() {
 
     refreshMostRecentTestsButtonText();
 
+    const refreshAttemptsMax = Math.max(1, Number(getActiveSettingValue('requestedTests.buttonRefreshAttempts', 10)) || 10);
+    const refreshIntervalMs = Math.max(50, Number(getActiveSettingValue('requestedTests.buttonRefreshIntervalMs', 250)) || 250);
     let refreshAttempts = 0;
     const refreshTimer = setInterval(() => {
         refreshMostRecentTestsButtonText();
         refreshAttempts += 1;
-        if (refreshAttempts >= 10 || $('.ma-lastly-requested-tests-btn').length === 0) {
+        if (refreshAttempts >= refreshAttemptsMax || $('.ma-lastly-requested-tests-btn').length === 0) {
             clearInterval(refreshTimer);
         }
-    }, 250);
+    }, refreshIntervalMs);
 }
 
 const MA_TEST_BATCHES_STORAGE_KEY = 'testBatches';
@@ -1779,6 +1825,17 @@ function collectDiagnosticTestGroups() {
 }
 
 function applyDiagnosticTestDuplicateHighlight() {
+    if (!isFeatureEnabled(getActiveSettings(), 'features.enableDuplicateTestHighlighting', true)) {
+        getDiagnosticTestRows().removeClass('ma-diagnostic-test-duplicate-muted ma-diagnostic-test-duplicate-conflict');
+        return;
+    }
+
+    const enableMutedRows = getActiveSettingValue('duplicateHighlight.enableMutedRows', true);
+    const enableConflictRows = getActiveSettingValue('duplicateHighlight.enableConflictRows', true);
+    const mutedOpacityRaw = Number(getActiveSettingValue('duplicateHighlight.mutedOpacity', 0.45));
+    const mutedOpacity = Number.isFinite(mutedOpacityRaw) ? Math.min(1, Math.max(0.1, mutedOpacityRaw)) : 0.45;
+    document.documentElement.style.setProperty('--ma-duplicate-muted-opacity', String(mutedOpacity));
+
     const groups = collectDiagnosticTestGroups();
 
     groups.forEach((items) => {
@@ -1790,13 +1847,18 @@ function applyDiagnosticTestDuplicateHighlight() {
 
         items.forEach((item) => {
             const isChecked = item.mainCheckbox.prop('checked');
-            item.$row.toggleClass('ma-diagnostic-test-duplicate-muted', anyChecked && !isChecked);
-            item.$row.toggleClass('ma-diagnostic-test-duplicate-conflict', conflict && isChecked);
+            item.$row.toggleClass('ma-diagnostic-test-duplicate-muted', enableMutedRows && anyChecked && !isChecked);
+            item.$row.toggleClass('ma-diagnostic-test-duplicate-conflict', enableConflictRows && conflict && isChecked);
         });
     });
 }
 
 function initDiagnosticTestDuplicateHighlighting() {
+    if (!isFeatureEnabled(getActiveSettings(), 'features.enableDuplicateTestHighlighting', true)) {
+        getDiagnosticTestRows().removeClass('ma-diagnostic-test-duplicate-muted ma-diagnostic-test-duplicate-conflict');
+        return;
+    }
+
     const rows = getDiagnosticTestRows();
     if (rows.length === 0) return;
 
@@ -1835,14 +1897,16 @@ function initDiagnosticTestDuplicateHighlighting() {
         });
         observer.observe(observerTarget, { childList: true, subtree: true });
 
+        const maxRefreshAttempts = Math.max(1, Number(getActiveSettingValue('duplicateHighlight.refreshAttempts', 8)) || 8);
+        const refreshIntervalMs = Math.max(50, Number(getActiveSettingValue('duplicateHighlight.refreshIntervalMs', 200)) || 200);
         let refreshAttempts = 0;
         const refreshTimer = setInterval(() => {
             applyDiagnosticTestDuplicateHighlight();
             refreshAttempts += 1;
-            if (refreshAttempts >= 8) {
+            if (refreshAttempts >= maxRefreshAttempts) {
                 clearInterval(refreshTimer);
             }
-        }, 200);
+        }, refreshIntervalMs);
 
         document.documentElement.dataset.maDiagnosticDuplicatesReady = '1';
         document.documentElement.dataset.maDiagnosticDuplicatesObserver = '1';
@@ -1884,6 +1948,7 @@ async function checkPage(){
     const settings = globalThis.MASettings
         ? await globalThis.MASettings.getMergedSettings()
         : null;
+    setActiveSettings(settings);
     
     // when loading (async) is completed, then add the click listener but don't wait with the rest of the page loading, because it can be done in the meantime
     const {
@@ -1892,7 +1957,7 @@ async function checkPage(){
         isIcdFavoriteCodesEnabled
     } = getIcdFeatureFlags(settings);
 
-    if (getSettingValue(settings, 'features.enableShortcutGroupMemory', true)) {
+    if (isFeatureEnabled(settings, 'features.enableShortcutGroupMemory', true)) {
         loadShortcutGroupsFromStorage().then(() => {
             addGrBtn4ClickListener();
         });
@@ -1903,14 +1968,16 @@ async function checkPage(){
     if (isIcdHelperEnabled) {
         addICDHelperButtons(settings);
     }
-    if (getSettingValue(settings, 'features.enableTotpAutoSubmit', true)) {
+    if (isFeatureEnabled(settings, 'features.enableTotpAutoSubmit', true)) {
         enhanceTOTPInput();
     }
     
 
     if ($('.templateEditPageTitle').length && $('.templateEditPageTitle').text().includes('Dane medyczne wizyty')) {
         console.log('Loading content for dane-medyczne page...');
-        pageDaneMedyczne(settings);
+        if (isFeatureEnabled(settings, 'features.enablePageDaneMedyczneEnhancements', true)) {
+            pageDaneMedyczne(settings);
+        }
         return;
     }
 
@@ -1931,11 +1998,24 @@ async function checkPage(){
     // check if the page contains span with id "skierowanie_plan_dataczas_all"
     if ($('#skierowanie_plan_dataczas_all').length) {
         console.log('Loading content for nowe-zlecenie-edycja page...');
-        configureTestBatchesSettings(settings);
-        addMostRecentRequestedTestsButton();
-        await addUserTestBatchesPanel();
-        pageNoweZlecenieEdycja(settings); 
-        initDiagnosticTestDuplicateHighlighting();
+
+        if (isFeatureEnabled(settings, 'features.enableTestBatchesPanel', true)) {
+            configureTestBatchesSettings(settings);
+            await addUserTestBatchesPanel();
+        }
+        if (isFeatureEnabled(settings, 'features.enableRecentRequestedTestsButton', true)) {
+            addMostRecentRequestedTestsButton();
+        } else {
+            $('.ma-lastly-requested-tests-btn').remove();
+        }
+
+        pageNoweZlecenieEdycja(settings);
+
+        if (isFeatureEnabled(settings, 'features.enableDuplicateTestHighlighting', true)) {
+            initDiagnosticTestDuplicateHighlighting();
+        } else {
+            getDiagnosticTestRows().removeClass('ma-diagnostic-test-duplicate-muted ma-diagnostic-test-duplicate-conflict');
+        }
         return;
     }
 

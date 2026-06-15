@@ -485,6 +485,14 @@ function addMassAndHeightChecker(pageElements, settings) {
 }
 
 function pageDaneMedyczne(settings){
+    const isFeatureEnabled = (featurePath, fallback) => {
+        if (!globalThis.MASettings || !settings) return Boolean(fallback);
+        if (typeof globalThis.MASettings.resolveFeatureState === 'function') {
+            return Boolean(globalThis.MASettings.resolveFeatureState(settings, featurePath).effective);
+        }
+        return Boolean(globalThis.MASettings.getPath(settings, featurePath));
+    };
+
     //wywiad: find textarea with name "skladniki_procedury_1702" and check if there is only one
     const wywiadTextArea = $('textarea[name="skladniki_procedury_1702"]');
     if (wywiadTextArea.length != 1) return; // No textarea found
@@ -557,20 +565,20 @@ function pageDaneMedyczne(settings){
     };
 
     console.log('Page elements found:', pageElements);
-    if (getSettingValue(settings, 'features.enablePozVisitTypeButtons', true)) {
+    if (isFeatureEnabled('features.enablePozVisitTypeButtons', true)) {
         addVisitTypeAutofillButtons(pageElements, settings);
     }
-    if (getSettingValue(settings, 'features.enableMassHeightTools', true)) {
+    if (isFeatureEnabled('features.enableMassHeightTools', true)) {
         addMassAndHeightChecker(pageElements, settings);
         addMassAndHeightDefaultAutofill(pageElements, settings);
         addLoadMassAndHeightButton(pageElements);
     }
-    if (getSettingValue(settings, 'features.enablePhoneNumberEnhancement', true)) {
+    if (isFeatureEnabled('features.enablePhoneNumberEnhancement', true)) {
         enhancePhoneNumbers();
     }
-    const isIcdHelperEnabled = getSettingValue(settings, 'features.enableIcdHelper', true);
-    const isIcdRecentCodesEnabled = getSettingValue(settings, 'features.enableIcdRecentCodes', true);
-    const isIcdFavoriteCodesEnabled = getSettingValue(settings, 'features.enableIcdFavoriteCodes', true);
+    const isIcdHelperEnabled = isFeatureEnabled('features.enableIcdHelper', true);
+    const isIcdRecentCodesEnabled = isFeatureEnabled('features.enableIcdRecentCodes', true);
+    const isIcdFavoriteCodesEnabled = isFeatureEnabled('features.enableIcdFavoriteCodes', true);
 
     if (isIcdHelperEnabled && (isIcdRecentCodesEnabled || isIcdFavoriteCodesEnabled)) {
         addFrequentlyUsedIcdCodes(settings);

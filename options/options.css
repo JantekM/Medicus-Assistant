@@ -15,6 +15,157 @@ h1 {
     margin: 0 0 8px;
 }
 
+.presets-root {
+    margin-top: 16px;
+    background: #ffffff;
+    border: 1px solid #dce3ec;
+    border-radius: 10px;
+    padding: 12px;
+}
+
+.backup-root {
+    margin-top: 12px;
+    background: #ffffff;
+    border: 1px solid #dce3ec;
+    border-radius: 10px;
+    padding: 12px;
+}
+
+.backup-title {
+    margin: 0 0 6px;
+    font-size: 14px;
+    font-weight: 700;
+    color: #0f172a;
+}
+
+.backup-description {
+    margin: 0;
+    color: #475569;
+    font-size: 13px;
+}
+
+.backup-scope-title {
+    margin-top: 10px;
+    font-size: 12px;
+    color: #334155;
+    font-weight: 700;
+}
+
+.backup-scope-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 6px;
+}
+
+.backup-scope-btn {
+    border: 1px solid #cbd5e1;
+    border-radius: 6px;
+    background: #e2e8f0;
+    color: #0f172a;
+    font-size: 12px;
+    font-weight: 600;
+    padding: 5px 9px;
+    cursor: pointer;
+}
+
+.backup-scope-btn:hover {
+    background: #cbd5e1;
+}
+
+.backup-scope-btn.secondary {
+    background: #f1f5f9;
+}
+
+.backup-scope-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(220px, 1fr));
+    gap: 6px 12px;
+    margin-top: 6px;
+}
+
+.backup-scope-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    color: #1f2937;
+}
+
+.backup-mode-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin-top: 6px;
+}
+
+.backup-mode-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    color: #1f2937;
+}
+
+.backup-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 10px;
+}
+
+.backup-btn {
+    border: 0;
+    border-radius: 8px;
+    color: #ffffff;
+    padding: 8px 12px;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.backup-btn.export {
+    background: #0f766e;
+}
+
+.backup-btn.export:hover {
+    background: #115e59;
+}
+
+.backup-btn.import {
+    background: #1d4ed8;
+}
+
+.backup-btn.import:hover {
+    background: #1e40af;
+}
+
+.presets-title {
+    margin: 0 0 8px;
+    font-size: 14px;
+    font-weight: 700;
+    color: #0f172a;
+}
+
+.presets-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.preset-btn {
+    background: #1d4ed8;
+    color: #ffffff;
+    border: 0;
+    border-radius: 8px;
+    padding: 8px 12px;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.preset-btn:hover {
+    background: #1e40af;
+}
+
 .settings-root {
     display: grid;
     gap: 16px;
@@ -25,7 +176,7 @@ h1 {
     background: #ffffff;
     border: 1px solid #dce3ec;
     border-radius: 10px;
-    padding: 16px;
+    padding: 12px 14px;
 }
 
 .section.is-dependency-disabled {
@@ -34,9 +185,68 @@ h1 {
     background: #f8fafc;
 }
 
-.section h2 {
-    margin: 0 0 8px;
+.section-title-text {
     font-size: 18px;
+    font-weight: 700;
+}
+
+.section-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+}
+
+.section-toggle {
+    width: 100%;
+    text-align: left;
+    background: transparent;
+    color: #0f172a;
+    border: 0;
+    padding: 4px 2px;
+    border-radius: 6px;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.section-toggle::before {
+    content: '▾';
+    display: inline-block;
+    margin-right: 6px;
+    color: #475569;
+}
+
+.section.is-collapsed .section-toggle::before {
+    content: '▸';
+}
+
+.section-toggle-hint {
+    font-size: 12px;
+    color: #64748b;
+    font-weight: 500;
+    margin-left: 6px;
+}
+
+.section-body {
+    margin-top: 8px;
+}
+
+.section.is-collapsed .section-body {
+    display: none;
+}
+
+.section-disabled-tag {
+    display: none;
+    font-size: 11px;
+    font-weight: 700;
+    color: #334155;
+    background: #e2e8f0;
+    border-radius: 999px;
+    padding: 3px 8px;
+}
+
+.section.is-dependency-disabled .section-disabled-tag {
+    display: inline-block;
 }
 
 .section p {
@@ -192,6 +402,37 @@ button.secondary {
 }
 
 @media (max-width: 760px) {
+    .presets-actions {
+        flex-direction: column;
+    }
+
+    .backup-actions {
+        flex-direction: column;
+    }
+
+    .backup-scope-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .backup-scope-actions {
+        flex-direction: column;
+    }
+
+    .backup-mode-row {
+        flex-direction: column;
+        gap: 6px;
+    }
+
+    .preset-btn {
+        width: 100%;
+        text-align: left;
+    }
+
+    .backup-btn {
+        width: 100%;
+        text-align: left;
+    }
+
     .field {
         grid-template-columns: 1fr;
         align-items: start;
