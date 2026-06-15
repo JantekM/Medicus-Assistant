@@ -367,6 +367,679 @@ function addMostRecentRequestedTestsButton() {
     }, 250);
 }
 
+const MA_TEST_BATCHES_STORAGE_KEY = 'testBatches';
+const MA_TEST_BATCHES_UI_STORAGE_KEY = 'testBatchesUiState';
+
+function getTestBatchesState() {
+    if (!globalThis.MATestBatchesState) {
+        globalThis.MATestBatchesState = {
+            batches: [],
+            isEditMode: false,
+            isCollapsed: false,
+            showUnavailableTests: false,
+            isSyncing: false,
+            batchListMaxHeightPx: 0,
+            mainIndex: new Map(),
+            keysByNormalized: new Map()
+        };
+    }
+    return globalThis.MATestBatchesState;
+}
+
+function configureTestBatchesSettings(settings) {
+    const state = getTestBatchesState();
+    const configuredValue = getSettingValue(
+        settings,
+        'tests.batchesMaxHeightPx',
+        getSettingValue(settings, 'tests.batchesMaxHeight', 0)
+    );
+    const parsedValue = Number(configuredValue);
+
+    state.batchListMaxHeightPx = Number.isFinite(parsedValue) && parsedValue > 0
+        ? Math.round(parsedValue)
+        : 0;
+}
+
+function normalizeBatchName(name) {
+    return String(name || '').replace(/\s+/g, ' ').trim();
+}
+
+function getUniqueBatchName(baseName, batches, excludedId = null) {
+    const normalizedBase = normalizeBatchName(baseName) || 'Nowy zestaw';
+    const names = new Set(
+        batches
+            .filter((batch) => batch && batch.id !== excludedId)
+            .map((batch) => normalizeBatchName(batch.name).toLowerCase())
+    );
+
+    if (!names.has(normalizedBase.toLowerCase())) {
+        return normalizedBase;
+    }
+
+    let index = 2;
+    while (names.has(`${normalizedBase} (${index})`.toLowerCase())) {
+        index += 1;
+    }
+    return `${normalizedBase} (${index})`;
+}
+
+function getBatchPanelRoot() {
+    return $('#ma-test-batches-panel');
+}
+
+function getBatchPanelTargetAnchor() {
+    const anchor = $('#profile_zestawybadańwyszukajidodajbadanie_ctrlf_począteknazwy');
+    if (anchor.length !== 1) return null;
+
+    const headerTr = anchor.closest('tr');
+    if (headerTr.length !== 1) return null;
+
+    const targetTr = headerTr.next('tr');
+    if (targetTr.length !== 1) return null;
+
+    const targetCell = targetTr.find('td,th').first();
+    if (targetCell.length !== 1) return null;
+
+    return targetCell;
+}
+
+function refreshMainTestIndexForBatches() {
+    const state = getTestBatchesState();
+    const rows = getMostRecentRequestedTestsRows();
+    const index = new Map();
+    const keysByNormalized = new Map();
+
+    rows.each(function () {
+        const $row = $(this);
+        const $mainCheckboxes = $row.find('input[type="checkbox"][name^="wykonanie_poz_pak_"]');
+        if ($mainCheckboxes.length === 0) return;
+
+        $mainCheckboxes.each(function () {
+            const $checkbox = $(this);
+            const checkboxName = $checkbox.attr('name') || '';
+            if (/^wykonanie_poz_cito_/i.test(checkboxName)) return;
+
+            const labelText = $checkbox.closest('td').find('label').first().text().trim() || checkboxName;
+            const normalizedLabel = normalizeDiagnosticTestLabel(labelText);
+            if (!checkboxName) return;
+
+            index.set(checkboxName, {
+                key: checkboxName,
+                normalizedLabel,
+                labelText,
+                $checkbox
+            });
+
+            if (normalizedLabel) {
+                if (!keysByNormalized.has(normalizedLabel)) {
+                    keysByNormalized.set(normalizedLabel, []);
+                }
+                keysByNormalized.get(normalizedLabel).push(checkboxName);
+            }
+        });
+    });
+
+    state.mainIndex = index;
+    state.keysByNormalized = keysByNormalized;
+}
+
+function getMainSelectedTestKeys() {
+    const state = getTestBatchesState();
+    const selected = [];
+
+    state.mainIndex.forEach((item, testKey) => {
+        if (item && item.$checkbox && item.$checkbox.prop('checked')) {
+            selected.push(testKey);
+        }
+    });
+
+    return selected;
+}
+
+function migrateLegacyBatchTestKeys() {
+    const state = getTestBatchesState();
+    let changed = false;
+
+    state.batches.forEach((batch) => {
+        const sourceKeys = Array.isArray(batch.testKeys) ? batch.testKeys : [];
+        const migrated = [];
+        const seen = new Set();
+
+        sourceKeys.forEach((value) => {
+            if (typeof value !== 'string' || value.trim() === '') return;
+            const rawKey = value.trim();
+
+            let resolvedKey = null;
+            if (state.mainIndex.has(rawKey)) {
+                resolvedKey = rawKey;
+            } else {
+                const normalized = normalizeDiagnosticTestLabel(rawKey);
+                const candidates = state.keysByNormalized.get(normalized) || [];
+                if (candidates.length > 0) {
+                    resolvedKey = candidates[0];
+                }
+            }
+
+            if (!resolvedKey || seen.has(resolvedKey)) return;
+            seen.add(resolvedKey);
+            migrated.push(resolvedKey);
+        });
+
+        if (migrated.length !== sourceKeys.length || migrated.some((key, idx) => key !== sourceKeys[idx])) {
+            batch.testKeys = migrated;
+            batch.modifiedAt = Date.now();
+            changed = true;
+        }
+    });
+
+    return changed;
+}
+
+async function loadTestBatchesFromStorage() {
+    const result = await chrome.storage.local.get([MA_TEST_BATCHES_STORAGE_KEY]);
+    const raw = result[MA_TEST_BATCHES_STORAGE_KEY];
+    const state = getTestBatchesState();
+
+    if (!Array.isArray(raw)) {
+        state.batches = [];
+        state.isEditMode = false;
+        return;
+    }
+
+    state.batches = raw
+        .filter((batch) => batch && typeof batch === 'object')
+        .map((batch) => {
+            const sourceKeys = Array.isArray(batch.testKeys)
+                ? batch.testKeys
+                : Array.isArray(batch.testLabels)
+                    ? batch.testLabels
+                    : [];
+            const testKeys = sourceKeys
+                .filter((key) => typeof key === 'string' && key.trim() !== '')
+                .map((key) => key.trim());
+            const seen = new Set();
+            const uniqueTestKeys = testKeys.filter((key) => {
+                if (seen.has(key)) return false;
+                seen.add(key);
+                return true;
+            });
+
+            return {
+                id: batch.id || `batch-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+                name: normalizeBatchName(batch.name) || 'Nowy zestaw',
+                testKeys: uniqueTestKeys,
+                createdAt: Number(batch.createdAt) || Date.now(),
+                modifiedAt: Number(batch.modifiedAt) || Date.now()
+            };
+        });
+
+    state.isEditMode = Boolean(state.isEditMode);
+}
+
+async function saveTestBatchesToStorage() {
+    const state = getTestBatchesState();
+    await chrome.storage.local.set({
+        [MA_TEST_BATCHES_STORAGE_KEY]: state.batches.map((batch) => ({
+            id: batch.id,
+            name: batch.name,
+            testKeys: Array.isArray(batch.testKeys) ? batch.testKeys : [],
+            createdAt: batch.createdAt,
+            modifiedAt: batch.modifiedAt
+        }))
+    });
+}
+
+async function loadTestBatchesUiState() {
+    const state = getTestBatchesState();
+    const result = await chrome.storage.local.get([MA_TEST_BATCHES_UI_STORAGE_KEY]);
+    const raw = result[MA_TEST_BATCHES_UI_STORAGE_KEY];
+
+    if (!raw || typeof raw !== 'object') {
+        state.isCollapsed = false;
+        state.showUnavailableTests = false;
+        return;
+    }
+
+    state.isCollapsed = Boolean(raw.isCollapsed);
+    state.showUnavailableTests = Boolean(raw.showUnavailableTests);
+}
+
+async function saveTestBatchesUiState() {
+    const state = getTestBatchesState();
+    await chrome.storage.local.set({
+        [MA_TEST_BATCHES_UI_STORAGE_KEY]: {
+            isCollapsed: Boolean(state.isCollapsed),
+            showUnavailableTests: Boolean(state.showUnavailableTests)
+        }
+    });
+}
+
+function getBatchById(batchId) {
+    const state = getTestBatchesState();
+    return state.batches.find((batch) => batch.id === batchId) || null;
+}
+
+function escapeHtml(value) {
+    return String(value)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
+function setMainCheckboxForTestKey(testKey, checked) {
+    const state = getTestBatchesState();
+    const item = state.mainIndex.get(testKey);
+    if (!item || !item.$checkbox) return;
+
+    const isChecked = item.$checkbox.prop('checked');
+    if (isChecked === checked) return;
+
+    item.$checkbox.trigger('click');
+    if (item.$checkbox.prop('checked') !== checked) {
+        item.$checkbox.prop('checked', checked).trigger('change');
+    }
+}
+
+function setBatchCheckboxesForTestKey(testKey, checked) {
+    const selectorValue = String(testKey).replace(/"/g, '\\"');
+    $(`.ma-batch-test-checkbox[data-test-key="${selectorValue}"]`).prop('checked', checked);
+}
+
+function refreshDuplicateHighlightNow() {
+    if (typeof initDiagnosticTestDuplicateHighlighting === 'function') {
+        initDiagnosticTestDuplicateHighlighting();
+    } else if (typeof applyDiagnosticTestDuplicateHighlight === 'function') {
+        applyDiagnosticTestDuplicateHighlight();
+    }
+}
+
+function applyBatchSelectionForKeys(testKeys, checked) {
+    const state = getTestBatchesState();
+    state.isSyncing = true;
+    testKeys.forEach((testKey) => {
+        setMainCheckboxForTestKey(testKey, checked);
+        setBatchCheckboxesForTestKey(testKey, checked);
+    });
+    state.isSyncing = false;
+
+    refreshDuplicateHighlightNow();
+    refreshDuplicateHighlightAfterAutoSelection();
+}
+
+function clearAllSelectedTestsFromBatches() {
+    const state = getTestBatchesState();
+    const selectedKeys = [];
+
+    state.mainIndex.forEach((item, testKey) => {
+        if (item && item.$checkbox && item.$checkbox.prop('checked')) {
+            selectedKeys.push(testKey);
+        }
+    });
+
+    if (selectedKeys.length === 0) {
+        $('.ma-batch-test-checkbox').prop('checked', false);
+        return;
+    }
+
+    applyBatchSelectionForKeys(selectedKeys, false);
+}
+
+function renderSingleBatchRows(batch, isEditMode) {
+    const state = getTestBatchesState();
+    const testKeys = Array.isArray(batch.testKeys) ? batch.testKeys : [];
+    if (!testKeys.length) {
+        return '<div class="ma-batches-empty">Zestaw nie zawiera badań.</div>';
+    }
+
+    const rowsHtml = testKeys.map((testKey, index) => {
+        const item = state.mainIndex.get(testKey);
+        const displayLabel = item ? item.labelText : testKey;
+        const isChecked = item ? item.$checkbox.prop('checked') : false;
+        const isMissing = !item;
+        if (isMissing && !state.showUnavailableTests) return '';
+        const dragAttr = isEditMode ? 'draggable="true"' : '';
+
+        return `
+            <div class="ma-batch-row${isMissing ? ' ma-batch-row-missing' : ''}" data-batch-id="${escapeHtml(batch.id)}" data-index="${index}" ${dragAttr}>
+                <button type="button" class="ma-batch-up-to-btn" data-batch-id="${escapeHtml(batch.id)}" data-index="${index}" ${isMissing ? 'disabled' : ''}>↧</button>
+                <input type="checkbox" class="ma-batch-test-checkbox" data-batch-id="${escapeHtml(batch.id)}" data-test-key="${escapeHtml(testKey)}" ${isChecked ? 'checked' : ''} ${isMissing ? 'disabled' : ''}>
+                <span class="ma-batch-test-label">${escapeHtml(displayLabel)}</span>
+                ${isEditMode ? `<button type="button" class="ma-batch-remove-test-btn" data-batch-id="${escapeHtml(batch.id)}" data-index="${index}" title="Usuń z zestawu">X</button>
+                <button type="button" class="ma-batch-move-btn" data-batch-id="${escapeHtml(batch.id)}" data-direction="up" data-index="${index}" ${index === 0 ? 'disabled' : ''}>↑</button>
+                <button type="button" class="ma-batch-move-btn" data-batch-id="${escapeHtml(batch.id)}" data-direction="down" data-index="${index}" ${index === testKeys.length - 1 ? 'disabled' : ''}>↓</button>` : ''}
+            </div>
+        `;
+    }).join('');
+
+    if (rowsHtml.trim() === '') {
+        return '<div class="ma-batches-empty">Brak dostępnych badań w tym zestawie.</div>';
+    }
+
+    return rowsHtml;
+}
+
+function renderTestBatchesPanel() {
+    const $panel = getBatchPanelRoot();
+    if ($panel.length !== 1) return;
+
+    const state = getTestBatchesState();
+    const countText = state.batches.length === 1 ? '1 zestaw' : `${state.batches.length} zestawy`;
+    const isEditMode = Boolean(state.isEditMode);
+    const isCollapsed = Boolean(state.isCollapsed);
+    const showUnavailableTests = Boolean(state.showUnavailableTests);
+    const batchListStyle = state.batchListMaxHeightPx > 0
+        ? ` style="max-height:${state.batchListMaxHeightPx}px;overflow-y:auto;overflow-x:hidden;"`
+        : '';
+
+    const cardsHtml = state.batches.map((batch) => {
+        return `
+            <section class="ma-batch-card" data-batch-id="${escapeHtml(batch.id)}">
+                <header class="ma-batch-card-header">
+                    <h4 class="ma-batch-card-title">${escapeHtml(batch.name)}</h4>
+                    <div class="ma-batch-card-actions${isEditMode ? '' : ' ma-batch-card-actions-hidden'}">
+                        <button type="button" class="ma-batches-add-selected" data-batch-id="${escapeHtml(batch.id)}">dodaj znaznaczone</button>
+                        <button type="button" class="ma-batches-rename" data-batch-id="${escapeHtml(batch.id)}">Zmień nazwę</button>
+                        <button type="button" class="ma-batches-delete" data-batch-id="${escapeHtml(batch.id)}">Usuń</button>
+                        <button type="button" class="ma-batches-move" data-batch-id="${escapeHtml(batch.id)}" data-direction="up">↑</button>
+                        <button type="button" class="ma-batches-move" data-batch-id="${escapeHtml(batch.id)}" data-direction="down">↓</button>
+                    </div>
+                </header>
+                <div class="ma-batch-card-list"${batchListStyle}>
+                    ${renderSingleBatchRows(batch, isEditMode)}
+                </div>
+            </section>
+        `;
+    }).join('');
+
+    const bodyHtml = `
+        <div class="ma-batches-toolbar">
+            <button type="button" class="ma-batches-toggle">${isCollapsed ? 'Pokaż zestawy' : 'Ukryj zestawy'}</button>
+            <span class="ma-batches-count">${countText}</span>
+            <button type="button" class="ma-batches-create">Utwórz zestaw</button>
+            <button type="button" class="ma-batches-edit-mode">${isEditMode ? 'Zakończ edycję' : 'Edytuj zestawy'}</button>
+            <button type="button" class="ma-batches-clear-all">Odznacz wszystko</button>
+            <button type="button" class="ma-batches-toggle-unavailable">${showUnavailableTests ? 'Ukryj niedostępne' : 'Pokaż niedostępne'}</button>
+        </div>
+        <div id="ma-test-batches-list" class="ma-batches-list${isCollapsed ? ' ma-batches-list-collapsed' : ''}">
+            ${cardsHtml || '<div class="ma-batches-empty">Brak zestawu. Zaznacz badania i kliknij "Utwórz zestaw".</div>'}
+        </div>
+    `;
+
+    $panel.toggleClass('ma-batches-collapsed', isCollapsed);
+    $panel.html(bodyHtml);
+}
+
+function moveBatchLabel(batchId, fromIndex, toIndex) {
+    const batch = getBatchById(batchId);
+    if (!batch) return;
+    if (fromIndex === toIndex) return;
+    if (fromIndex < 0 || toIndex < 0) return;
+    if (fromIndex >= batch.testKeys.length || toIndex >= batch.testKeys.length) return;
+
+    const [item] = batch.testKeys.splice(fromIndex, 1);
+    batch.testKeys.splice(toIndex, 0, item);
+    batch.modifiedAt = Date.now();
+}
+
+function moveBatchCard(fromIndex, toIndex) {
+    const state = getTestBatchesState();
+    if (fromIndex === toIndex) return;
+    if (fromIndex < 0 || toIndex < 0) return;
+    if (fromIndex >= state.batches.length || toIndex >= state.batches.length) return;
+
+    const [item] = state.batches.splice(fromIndex, 1);
+    state.batches.splice(toIndex, 0, item);
+}
+
+function bindTestBatchesEvents() {
+    $(document)
+        .off('click.MA_batchesToggle')
+        .on('click.MA_batchesToggle', '.ma-batches-toggle', async function () {
+            const state = getTestBatchesState();
+            state.isCollapsed = !state.isCollapsed;
+            await saveTestBatchesUiState();
+            renderTestBatchesPanel();
+        })
+        .off('click.MA_batchesToggleUnavailable')
+        .on('click.MA_batchesToggleUnavailable', '.ma-batches-toggle-unavailable', async function () {
+            const state = getTestBatchesState();
+            state.showUnavailableTests = !state.showUnavailableTests;
+            await saveTestBatchesUiState();
+            renderTestBatchesPanel();
+        })
+        .off('click.MA_batchesCreate')
+        .on('click.MA_batchesCreate', '.ma-batches-create', async function () {
+            refreshMainTestIndexForBatches();
+            const selectedKeys = getMainSelectedTestKeys();
+            if (!selectedKeys.length) {
+                alert('Najpierw zaznacz badania, które mają tworzyć zestaw.');
+                return;
+            }
+
+            const state = getTestBatchesState();
+            const inputName = window.prompt('Nazwa nowego zestawu:', 'Nowy zestaw');
+            if (inputName === null) return;
+
+            const uniqueName = getUniqueBatchName(inputName, state.batches);
+            const now = Date.now();
+            const newBatch = {
+                id: `batch-${now}-${Math.random().toString(16).slice(2)}`,
+                name: uniqueName,
+                testKeys: selectedKeys,
+                createdAt: now,
+                modifiedAt: now
+            };
+
+            state.batches.push(newBatch);
+            await saveTestBatchesToStorage();
+            renderTestBatchesPanel();
+        })
+        .off('click.MA_batchesEditMode')
+        .on('click.MA_batchesEditMode', '.ma-batches-edit-mode', function () {
+            const state = getTestBatchesState();
+            state.isEditMode = !state.isEditMode;
+            renderTestBatchesPanel();
+        })
+        .off('click.MA_batchesClearAll')
+        .on('click.MA_batchesClearAll', '.ma-batches-clear-all', function () {
+            clearAllSelectedTestsFromBatches();
+        })
+        .off('click.MA_batchesRename')
+        .on('click.MA_batchesRename', '.ma-batches-rename', async function () {
+            const state = getTestBatchesState();
+            if (!state.isEditMode) return;
+            const batchId = $(this).data('batch-id');
+            const batch = getBatchById(batchId);
+            if (!batch) return;
+
+            const inputName = window.prompt('Nowa nazwa zestawu:', batch.name);
+            if (inputName === null) return;
+            const uniqueName = getUniqueBatchName(inputName, state.batches, batch.id);
+            batch.name = uniqueName;
+            batch.modifiedAt = Date.now();
+            await saveTestBatchesToStorage();
+            renderTestBatchesPanel();
+        })
+        .off('click.MA_batchesDelete')
+        .on('click.MA_batchesDelete', '.ma-batches-delete', async function () {
+            const state = getTestBatchesState();
+            if (!state.isEditMode) return;
+            const batchId = $(this).data('batch-id');
+            const batch = getBatchById(batchId);
+            if (!batch) return;
+            if (!window.confirm(`Usunąć zestaw "${batch.name}"?`)) return;
+
+            state.batches = state.batches.filter((item) => item.id !== batch.id);
+            await saveTestBatchesToStorage();
+            renderTestBatchesPanel();
+        })
+        .off('click.MA_batchesAddSelected')
+        .on('click.MA_batchesAddSelected', '.ma-batches-add-selected', async function () {
+            const state = getTestBatchesState();
+            if (!state.isEditMode) return;
+            const batchId = $(this).data('batch-id');
+            const batch = getBatchById(batchId);
+            if (!batch) return;
+
+            refreshMainTestIndexForBatches();
+            const selectedKeys = getMainSelectedTestKeys();
+            if (!selectedKeys.length) return;
+
+            const keySet = new Set(batch.testKeys);
+            selectedKeys.forEach((testKey) => {
+                if (!keySet.has(testKey)) {
+                    keySet.add(testKey);
+                    batch.testKeys.push(testKey);
+                }
+            });
+            batch.modifiedAt = Date.now();
+            await saveTestBatchesToStorage();
+            renderTestBatchesPanel();
+        })
+        .off('click.MA_batchesMoveCard')
+        .on('click.MA_batchesMoveCard', '.ma-batches-move', async function () {
+            const state = getTestBatchesState();
+            if (!state.isEditMode) return;
+            const batchId = $(this).data('batch-id');
+            const direction = $(this).data('direction');
+            const fromIndex = state.batches.findIndex((batch) => batch.id === batchId);
+            if (fromIndex < 0) return;
+            const toIndex = direction === 'up' ? fromIndex - 1 : fromIndex + 1;
+            moveBatchCard(fromIndex, toIndex);
+            await saveTestBatchesToStorage();
+            renderTestBatchesPanel();
+        })
+        .off('click.MA_batchRemoveTest')
+        .on('click.MA_batchRemoveTest', '.ma-batch-remove-test-btn', async function () {
+            const state = getTestBatchesState();
+            if (!state.isEditMode) return;
+            const batchId = $(this).data('batch-id');
+            const batch = getBatchById(batchId);
+            if (!batch) return;
+            const index = Number($(this).data('index'));
+            if (!Number.isFinite(index) || index < 0 || index >= batch.testKeys.length) return;
+
+            batch.testKeys.splice(index, 1);
+            batch.modifiedAt = Date.now();
+            await saveTestBatchesToStorage();
+            renderTestBatchesPanel();
+        })
+        .off('change.MA_batchesCheckbox')
+        .on('change.MA_batchesCheckbox', '.ma-batch-test-checkbox', function () {
+            const state = getTestBatchesState();
+            if (state.isSyncing) return;
+
+            const testKey = $(this).data('test-key');
+            const checked = $(this).prop('checked');
+            applyBatchSelectionForKeys([testKey], checked);
+        })
+        .off('click.MA_batchesUpTo')
+        .on('click.MA_batchesUpTo', '.ma-batch-up-to-btn', function () {
+            const state = getTestBatchesState();
+            const batchId = $(this).data('batch-id');
+            const batch = getBatchById(batchId);
+            if (!batch) return;
+
+            const index = Number($(this).data('index'));
+            if (!Number.isFinite(index) || index < 0) return;
+
+            const keysToSelect = batch.testKeys
+                .slice(0, index + 1)
+                .filter((testKey) => state.mainIndex.has(testKey));
+            applyBatchSelectionForKeys(keysToSelect, true);
+        })
+        .off('click.MA_batchesMoveBtn')
+        .on('click.MA_batchesMoveBtn', '.ma-batch-move-btn', async function () {
+            const state = getTestBatchesState();
+            if (!state.isEditMode) return;
+            const batchId = $(this).data('batch-id');
+
+            const index = Number($(this).data('index'));
+            const direction = $(this).data('direction');
+            const targetIndex = direction === 'up' ? index - 1 : index + 1;
+            moveBatchLabel(batchId, index, targetIndex);
+            await saveTestBatchesToStorage();
+            renderTestBatchesPanel();
+        })
+        .off('dragstart.MA_batchesDnd')
+        .on('dragstart.MA_batchesDnd', '.ma-batch-row', function (event) {
+            const state = getTestBatchesState();
+            if (!state.isEditMode) return;
+            const batchId = $(this).data('batch-id');
+
+            const payload = {
+                batchId,
+                index: Number($(this).data('index'))
+            };
+            event.originalEvent.dataTransfer.setData('text/plain', JSON.stringify(payload));
+        })
+        .off('dragover.MA_batchesDnd')
+        .on('dragover.MA_batchesDnd', '.ma-batch-row', function (event) {
+            const state = getTestBatchesState();
+            if (!state.isEditMode) return;
+
+            event.preventDefault();
+        })
+        .off('drop.MA_batchesDnd')
+        .on('drop.MA_batchesDnd', '.ma-batch-row', async function (event) {
+            const state = getTestBatchesState();
+            if (!state.isEditMode) return;
+            const toBatchId = $(this).data('batch-id');
+
+            event.preventDefault();
+            let payload = null;
+            try {
+                payload = JSON.parse(event.originalEvent.dataTransfer.getData('text/plain'));
+            } catch {
+                return;
+            }
+
+            if (!payload || payload.batchId !== toBatchId) return;
+            const fromIndex = Number(payload.index);
+            const toIndex = Number($(this).data('index'));
+            if (!Number.isFinite(fromIndex) || !Number.isFinite(toIndex)) return;
+
+            moveBatchLabel(toBatchId, fromIndex, toIndex);
+            await saveTestBatchesToStorage();
+            renderTestBatchesPanel();
+        })
+        .off('change.MA_batchesMainSync')
+        .on('change.MA_batchesMainSync', 'tr.rowedit input[type="checkbox"][name^="wykonanie_poz_pak_"]', function () {
+            const state = getTestBatchesState();
+            if (state.isSyncing) return;
+
+            const testKey = $(this).attr('name') || '';
+            if (!testKey || /^wykonanie_poz_cito_/i.test(testKey)) return;
+
+            const checked = $(this).prop('checked');
+            state.isSyncing = true;
+            setBatchCheckboxesForTestKey(testKey, checked);
+            state.isSyncing = false;
+        });
+}
+
+async function addUserTestBatchesPanel() {
+    const $targetCell = getBatchPanelTargetAnchor();
+    if (!$targetCell || $targetCell.length !== 1) return;
+
+    let $panel = getBatchPanelRoot();
+    if ($panel.length === 0) {
+        $panel = $('<div id="ma-test-batches-panel" class="ma-test-batches-panel"></div>');
+        $targetCell.prepend($panel);
+    }
+
+    refreshMainTestIndexForBatches();
+    await loadTestBatchesFromStorage();
+    await loadTestBatchesUiState();
+    if (migrateLegacyBatchTestKeys()) {
+        await saveTestBatchesToStorage();
+    }
+    bindTestBatchesEvents();
+    renderTestBatchesPanel();
+}
+
 async function addICDHelperPanel(targetTable, codeInput = null, descriptionInput = null, settings = null) {
     const resolvedSettings = settings || (globalThis.MASettings ? await globalThis.MASettings.getMergedSettings() : null);
     const { isIcdRecentCodesEnabled, isIcdFavoriteCodesEnabled } = getIcdFeatureFlags(resolvedSettings);
@@ -1258,7 +1931,9 @@ async function checkPage(){
     // check if the page contains span with id "skierowanie_plan_dataczas_all"
     if ($('#skierowanie_plan_dataczas_all').length) {
         console.log('Loading content for nowe-zlecenie-edycja page...');
+        configureTestBatchesSettings(settings);
         addMostRecentRequestedTestsButton();
+        await addUserTestBatchesPanel();
         pageNoweZlecenieEdycja(settings); 
         initDiagnosticTestDuplicateHighlighting();
         return;

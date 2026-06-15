@@ -101,3 +101,136 @@ tr.ma-diagnostic-test-duplicate-conflict td {
   opacity: 0.55;
   cursor: not-allowed;
 }
+
+.ma-test-batches-panel {
+  margin: 8px 0;
+  padding: 8px;
+  border: 1px solid #b9b9b9;
+  background: #f8f8f8;
+}
+
+.ma-batches-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  margin-bottom: 6px;
+}
+
+.ma-batches-count {
+  font-size: 12px;
+  color: #444;
+  margin-right: 6px;
+}
+
+.ma-batches-select {
+  min-width: 200px;
+}
+
+.ma-batches-list {
+  border-top: 1px solid #ddd;
+  padding-top: 6px;
+  column-width: 320px;
+  column-gap: 10px;
+}
+
+.ma-batches-list-collapsed {
+  display: none;
+}
+
+.ma-batches-empty {
+  color: #666;
+  font-style: italic;
+  padding: 4px 0;
+}
+
+.ma-batch-row {
+  display: flex;
+  flex-flow: row nowrap;
+  width: 100%;
+  gap: 6px;
+  align-items: flex-start;
+  padding: 4px 0;
+}
+
+.ma-batch-row-missing {
+  opacity: 0.55;
+}
+
+.ma-batch-row-missing .ma-batch-test-checkbox {
+  filter: grayscale(1);
+  cursor: not-allowed;
+}
+
+.ma-batch-test-label {
+  font-size: 13px;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.ma-batch-row[draggable="true"] {
+  cursor: move;
+}
+
+.ma-batch-card {
+  border: 1px solid #cfcfcf;
+  background: #ffffff;
+  border-radius: 4px;
+  padding: 8px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
+  width: 100%;
+  max-width: 100%;
+  margin: 0 0 10px;
+  break-inside: avoid;
+  -webkit-column-break-inside: avoid;
+  page-break-inside: avoid;
+  box-sizing: border-box;
+}
+
+.ma-batch-card-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.ma-batch-card-title {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.2;
+}
+
+.ma-batch-card-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  justify-content: flex-end;
+}
+
+.ma-batch-card-actions-hidden {
+  display: none;
+}
+
+.ma-batches-add-selected {
+  white-space: nowrap;
+}
+
+.ma-batch-remove-test-btn {
+  color: #8b1d1d;
+  border-color: #d2a0a0;
+  background: #fff4f4;
+  font-weight: 700;
+}
+
+.ma-batch-remove-test-btn:hover {
+  background: #ffe8e8;
+}
+
+.ma-batch-card-list {
+  border-top: 1px solid #efefef;
+  padding-top: 6px;
+}
